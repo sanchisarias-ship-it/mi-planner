@@ -3,137 +3,107 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🚴‍♂️ Mi Planner Saludable</title>
-<style>
-body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f2f2f7;}
-header { background:#000; color:#fff; padding:16px; text-align:center;}
-nav { display:flex; background:#111; }
-nav button { flex:1; padding:12px; background:#111; color:white; border:none; }
-nav button.active { background:#333; }
-section { display:none; padding:14px; }
-section.active { display:block; }
-.card { background:white; padding:14px; border-radius:14px; margin-bottom:12px; }
-.grid { display:grid; grid-template-columns: repeat(7,1fr); gap:6px; }
-.weekdays { display:grid; grid-template-columns: repeat(7,1fr); font-size:12px; text-align:center; margin-bottom:6px; color:#666;}
-.day { background:#eee; padding:10px; border-radius:10px; font-size:12px; text-align:center; cursor:pointer; }
-.day.planned { background:#d9ead3; }
-.day.completed { background:#93c47d; }
-.day.today { border:2px solid #000; }
-input { width:100%; padding:8px; margin-top:6px; }
-ul { padding-left:18px;}
-button.primary { background:black; color:white; border:none; padding:10px; border-radius:10px; margin-top:10px; width:100%; }
-.small { font-size:13px; color:#666; }
-.selectors { display:flex; gap:8px; margin-bottom:10px; }
-.cat { margin-bottom:12px; }
-.cat h3 { margin-bottom:4px; }
-</style>
+<title>Mi Planner Saludable</title>
 
 <style>
-/* Estilo cuando un alimento está marcado como comprado */
+body { font-family:-apple-system,BlinkMacSystemFont,Arial; background:#f2f2f7; margin:0; }
+header { background:#000; color:#fff; padding:14px; text-align:center; }
+section { padding:14px; }
+.card { background:#fff; padding:14px; border-radius:14px; margin-bottom:12px; }
+h3 { margin-top:16px; }
+input { padding:8px; width:70%; }
+button { padding:6px 10px; margin-left:6px; }
+li { margin:6px 0; list-style:none; }
+
 li.comprado {
   text-decoration: line-through;
-  color: #999;
+  color: #777;
   background: #e6ffe6;
   border-radius: 8px;
   padding: 4px;
 }
 </style>
-
 </head>
 <body>
 
 <header>
-<h1>🚴‍♂️ Mi Planner Saludable</h1>
-<p>Versión depurada</p>
+<h1>🛒 Mi Planner Saludable</h1>
 </header>
 
-<nav>
-<button class="active" onclick="showTab('hoy',this)">Hoy</button>
-<button onclick="showTab('calendario',this)">Calendario</button>
-<button onclick="showTab('alimentos',this)">Alimentos</button>
-</nav>
-
-<section id="hoy" class="active">
-<div class="card">
-<h2 id="hoyTitulo"></h2>
-<div id="hoyEventos"></div>
-<button class="primary" onclick="toggleCompleted()">🔁 Marcar / Desmarcar día completado</button>
-<p id="estadoHoy" class="small"></p>
-</div>
-</section>
-
-<section id="calendario">
-<div class="card">
-<h2>Calendario</h2>
-<div class="selectors">
-  <select id="monthSelect"></select>
-  <select id="yearSelect"></select>
-</div>
-<div class="weekdays">
-  <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
-</div>
-<div id="calendar" class="grid"></div>
-</div>
-<div class="card">
-<h3 id="detalleFecha">Selecciona un día</h3>
-<div id="detalleEventos"></div>
-</div>
-</section>
-
 <section id="alimentos">
-<div class="card"><h2>Proteínas</h2><ul id="prot"></ul><input id="protInput"><button class="primary" onclick="addFood('prot','protInput')">Añadir</button></div>
-<div class="card"><h2>Verduras</h2><ul id="verd"></ul><input id="verdInput"><button class="primary" onclick="addFood('verd','verdInput')">Añadir</button></div>
-<div class="card"><h2>Hidratos</h2><ul id="hidr"></ul><input id="hidrInput"><button class="primary" onclick="addFood('hidr','hidrInput')">Añadir</button></div>
+<div class="card" id="alimentosContenido"></div>
 </section>
-
 
 <script>
-// ===============================
-// CHECKLIST VISUAL EN ALIMENTOS
-// ===============================
-function aplicarChecklist() {
-  const cont = document.getElementById("alimentosContenido");
-  if (!cont) return;
+const BASE = {
+  "Proteínas": ["Pollo", "Huevos", "Atún", "Salmón", "Ternera"],
+  "Verduras": ["Tomate", "Lechuga", "Brócoli", "Calabacín"],
+  "Hidratos": ["Arroz", "Avena", "Pan integral", "Patata"],
+  "Otros": ["Aceite de oliva", "Fruta", "Frutos secos"]
+};
 
-  cont.querySelectorAll("li").forEach(li => {
-    if (li.querySelector("input[type='checkbox']")) return;
-
-    const texto = li.textContent.replace("❌","").trim();
-    const key = "check_" + texto;
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.style.marginRight = "8px";
-    checkbox.checked = !!localStorage.getItem(key);
-
-    if (checkbox.checked) {
-      li.classList.add("comprado");
-    }
-
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) {
-        localStorage.setItem(key, "1");
-        li.classList.add("comprado");
-      } else {
-        localStorage.removeItem(key);
-        li.classList.remove("comprado");
-      }
-    });
-
-    li.prepend(checkbox);
-  });
+function getCats() {
+  if (!localStorage.getItem("cats")) {
+    localStorage.setItem("cats", JSON.stringify(BASE));
+  }
+  return JSON.parse(localStorage.getItem("cats"));
 }
 
-const observer = new MutationObserver(() => aplicarChecklist());
+function saveCats(cats) {
+  localStorage.setItem("cats", JSON.stringify(cats));
+}
 
-document.addEventListener("DOMContentLoaded", () => {
-  const alimentos = document.getElementById("alimentosContenido");
-  if (alimentos) {
-    observer.observe(alimentos, { childList: true, subtree: true });
+function renderAlimentos() {
+  const cats = getCats();
+  let html = "";
+  for (let cat in cats) {
+    html += "<h3>" + cat + "</h3><ul>";
+    cats[cat].forEach((item, i) => {
+      const key = "check_" + item;
+      const checked = localStorage.getItem(key) ? "checked" : "";
+      const comprado = localStorage.getItem(key) ? "comprado" : "";
+
+      html += "<li class='" + comprado + "'>";
+      html += "<input type='checkbox' onchange=\"toggleCheck('" + key + "', this)\" " + checked + "> ";
+      html += item;
+      html += " <button onclick=\"removeFood('" + cat + "'," + i + ")\">❌</button>";
+      html += "</li>";
+    });
+    html += "</ul>";
+    html += "<input id='in_" + cat + "' placeholder='Añadir alimento'>";
+    html += "<button onclick=\"addFood('" + cat + "')\">Añadir</button>";
   }
-  aplicarChecklist();
-});
+  document.getElementById("alimentosContenido").innerHTML = html;
+}
+
+function toggleCheck(key, checkbox) {
+  if (checkbox.checked) {
+    localStorage.setItem(key, "1");
+    checkbox.parentElement.classList.add("comprado");
+  } else {
+    localStorage.removeItem(key);
+    checkbox.parentElement.classList.remove("comprado");
+  }
+}
+
+function addFood(cat) {
+  const cats = getCats();
+  const val = document.getElementById("in_" + cat).value.trim();
+  if (!val) return;
+  cats[cat].push(val);
+  saveCats(cats);
+  renderAlimentos();
+}
+
+function removeFood(cat, i) {
+  const cats = getCats();
+  cats[cat].splice(i, 1);
+  saveCats(cats);
+  renderAlimentos();
+}
+
+renderAlimentos();
 </script>
+
 </body>
 </html>
-
