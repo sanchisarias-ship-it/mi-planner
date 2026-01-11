@@ -286,28 +286,45 @@ function showTab(tab,btn) {
   if (tab === "compra") generarCompra();
 }
 </script>
-</body>
-</html>
+
 
 <script>
-// === NUEVA LÓGICA DE COMPRA: lista completa desde ALIMENTOS ===
-function generarCompra() {
-  const cats = getCats();
-  const cont = document.getElementById("compraContenido");
-  cont.innerHTML = "";
+// ================================
+// PARCHE SEGURO: COMPRA = ALIMENTOS
+// ================================
 
-  for (let cat in cats) {
-    if (cats[cat].length === 0) continue;
+// Reconstruye la lista de compra leyendo directamente la pestaña de Alimentos
+function rebuildCompraDesdeAlimentos() {
+  const compra = document.getElementById("compraContenido");
+  const alimentos = document.getElementById("alimentosContenido");
+  if (!compra || !alimentos) return;
 
-    let html = "<div class='cat'><h3>" + cat + "</h3><ul>";
-    cats[cat].forEach(item => {
-      const key = "buy_" + cat + "_" + item;
+  compra.innerHTML = "";
+
+  // Por cada categoría en alimentos
+  const categorias = alimentos.querySelectorAll("h3");
+  categorias.forEach(cat => {
+    const nombre = cat.textContent;
+    let ul = cat.nextElementSibling;
+    if (!ul || ul.tagName !== "UL") return;
+
+    let bloque = document.createElement("div");
+    bloque.innerHTML = "<h3>" + nombre + "</h3>";
+    let lista = document.createElement("ul");
+
+    ul.querySelectorAll("li").forEach(li => {
+      const texto = li.textContent.replace("❌","").trim();
+      const key = "buy_" + nombre + "_" + texto;
       const checked = localStorage.getItem(key) ? "checked" : "";
-      html += "<li><label><input type='checkbox' onchange="toggleBuy('" + key + "')" " + checked + "> " + item + "</label></li>";
+
+      const item = document.createElement("li");
+      item.innerHTML = "<label><input type='checkbox' onchange=\"toggleBuy('"+key+"')\" "+checked+"> " + texto + "</label>";
+      lista.appendChild(item);
     });
-    html += "</ul></div>";
-    cont.innerHTML += html;
-  }
+
+    bloque.appendChild(lista);
+    compra.appendChild(bloque);
+  });
 }
 
 function toggleBuy(key) {
@@ -315,15 +332,25 @@ function toggleBuy(key) {
   else localStorage.setItem(key, "1");
 }
 
-// Forzar refresco al cambiar a pestaña compra
-const oldShowTab = showTab;
-showTab = function(tab, btn) {
-  oldShowTab(tab, btn);
-  if (tab === "compra") generarCompra();
-};
+// Detecta cambios en Alimentos automáticamente
+const observer = new MutationObserver(() => rebuildCompraDesdeAlimentos());
 
-// Render inicial
-generarCompra();
+document.addEventListener("DOMContentLoaded", () => {
+  const alimentos = document.getElementById("alimentosContenido");
+  if (alimentos) {
+    observer.observe(alimentos, { childList: true, subtree: true });
+  }
+  rebuildCompraDesdeAlimentos();
+});
+
+// También refresca cuando se entra a la pestaña Compra
+const oldShowTab = window.showTab;
+if (oldShowTab) {
+  window.showTab = function(tab, btn) {
+    oldShowTab(tab, btn);
+    if (tab === "compra") rebuildCompraDesdeAlimentos();
+  };
+}
 </script>
 </body>
 </html>
