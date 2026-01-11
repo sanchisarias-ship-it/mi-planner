@@ -39,7 +39,6 @@ button.primary { background:black; color:white; border:none; padding:10px; borde
 <button class="active" onclick="showTab('hoy',this)">Hoy</button>
 <button onclick="showTab('calendario',this)">Calendario</button>
 <button onclick="showTab('alimentos',this)">Alimentos</button>
-<button onclick="showTab('compra',this)">Compra</button>
 </nav>
 
 <section id="hoy" class="active">
@@ -73,13 +72,6 @@ button.primary { background:black; color:white; border:none; padding:10px; borde
 <div class="card"><h2>Proteínas</h2><ul id="prot"></ul><input id="protInput"><button class="primary" onclick="addFood('prot','protInput')">Añadir</button></div>
 <div class="card"><h2>Verduras</h2><ul id="verd"></ul><input id="verdInput"><button class="primary" onclick="addFood('verd','verdInput')">Añadir</button></div>
 <div class="card"><h2>Hidratos</h2><ul id="hidr"></ul><input id="hidrInput"><button class="primary" onclick="addFood('hidr','hidrInput')">Añadir</button></div>
-</section>
-
-<section id="compra">
-<div class="card">
-<h2>🛒 Lista de compra semanal (solo alimentos reales)</h2>
-<div id="compraContenido"></div>
-</div>
 </section>
 
 <script>
@@ -288,69 +280,52 @@ function showTab(tab,btn) {
 </script>
 
 
+<style>
+/* Oculta la pestaña de Compra y su botón */
+nav button[onclick*="compra"] { display:none !important; }
+#compra { display:none !important; }
+</style>
+
 <script>
-// ================================
-// PARCHE SEGURO: COMPRA = ALIMENTOS
-// ================================
+// ===============================
+// CHECKLIST DE COMPRA EN ALIMENTOS
+// ===============================
 
-// Reconstruye la lista de compra leyendo directamente la pestaña de Alimentos
-function rebuildCompraDesdeAlimentos() {
-  const compra = document.getElementById("compraContenido");
-  const alimentos = document.getElementById("alimentosContenido");
-  if (!compra || !alimentos) return;
+// Añade checkbox a cada elemento de alimentos
+function aplicarChecklist() {
+  const cont = document.getElementById("alimentosContenido");
+  if (!cont) return;
 
-  compra.innerHTML = "";
+  cont.querySelectorAll("li").forEach(li => {
+    if (li.querySelector("input[type='checkbox']")) return;
 
-  // Por cada categoría en alimentos
-  const categorias = alimentos.querySelectorAll("h3");
-  categorias.forEach(cat => {
-    const nombre = cat.textContent;
-    let ul = cat.nextElementSibling;
-    if (!ul || ul.tagName !== "UL") return;
+    const texto = li.textContent.replace("❌","").trim();
+    const key = "check_" + texto;
 
-    let bloque = document.createElement("div");
-    bloque.innerHTML = "<h3>" + nombre + "</h3>";
-    let lista = document.createElement("ul");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.style.marginRight = "8px";
+    checkbox.checked = !!localStorage.getItem(key);
 
-    ul.querySelectorAll("li").forEach(li => {
-      const texto = li.textContent.replace("❌","").trim();
-      const key = "buy_" + nombre + "_" + texto;
-      const checked = localStorage.getItem(key) ? "checked" : "";
-
-      const item = document.createElement("li");
-      item.innerHTML = "<label><input type='checkbox' onchange=\"toggleBuy('"+key+"')\" "+checked+"> " + texto + "</label>";
-      lista.appendChild(item);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) localStorage.setItem(key, "1");
+      else localStorage.removeItem(key);
     });
 
-    bloque.appendChild(lista);
-    compra.appendChild(bloque);
+    li.prepend(checkbox);
   });
 }
 
-function toggleBuy(key) {
-  if (localStorage.getItem(key)) localStorage.removeItem(key);
-  else localStorage.setItem(key, "1");
-}
-
-// Detecta cambios en Alimentos automáticamente
-const observer = new MutationObserver(() => rebuildCompraDesdeAlimentos());
+// Observa cambios en alimentos para reaplicar automáticamente
+const observer = new MutationObserver(() => aplicarChecklist());
 
 document.addEventListener("DOMContentLoaded", () => {
   const alimentos = document.getElementById("alimentosContenido");
   if (alimentos) {
     observer.observe(alimentos, { childList: true, subtree: true });
   }
-  rebuildCompraDesdeAlimentos();
+  aplicarChecklist();
 });
-
-// También refresca cuando se entra a la pestaña Compra
-const oldShowTab = window.showTab;
-if (oldShowTab) {
-  window.showTab = function(tab, btn) {
-    oldShowTab(tab, btn);
-    if (tab === "compra") rebuildCompraDesdeAlimentos();
-  };
-}
 </script>
 </body>
 </html>
