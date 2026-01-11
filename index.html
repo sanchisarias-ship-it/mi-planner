@@ -32,7 +32,7 @@ button.primary { background:black; color:white; border:none; padding:10px; borde
 
 <header>
 <h1>🚴‍♂️ Mi Planner Saludable</h1>
-<p>Versión mejorada</p>
+<p>Versión depurada</p>
 </header>
 
 <nav>
@@ -77,7 +77,7 @@ button.primary { background:black; color:white; border:none; padding:10px; borde
 
 <section id="compra">
 <div class="card">
-<h2>🛒 Lista de compra semanal</h2>
+<h2>🛒 Lista de compra semanal (solo alimentos reales)</h2>
 <div id="compraContenido"></div>
 </div>
 </section>
@@ -87,6 +87,7 @@ var DATA = {"2026-01-10": [{"date": "2026-01-10", "time": "05:30", "summary": "D
 var today = new Date();
 var todayKey = today.toISOString().slice(0,10);
 
+// ---------- Hoy ----------
 document.getElementById("hoyTitulo").innerText = today.toLocaleDateString("es-ES", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
 renderEventos("hoyEventos", DATA[todayKey]);
 updateStatus();
@@ -120,7 +121,7 @@ function updateStatus() {
     localStorage.getItem("done_"+todayKey) ? "Estado: día completado" : "Estado: pendiente";
 }
 
-// Calendario lunes-domingo
+// ---------- Calendario ----------
 var monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 var monthSelect = document.getElementById("monthSelect");
 var yearSelect = document.getElementById("yearSelect");
@@ -179,7 +180,7 @@ function mostrarDetalle(fecha,key) {
 
 renderMonth();
 
-// Alimentos
+// ---------- Alimentos ----------
 var defaults = {
  prot:["Huevos","Pollo","Pavo","Atún","Salmón","Lentejas"],
  verd:["Espinacas","Brócoli","Tomate","Lechuga","Zanahoria"],
@@ -226,12 +227,16 @@ renderFoods("prot");
 renderFoods("verd");
 renderFoods("hidr");
 
-// Compra categorizada
+// ---------- Compra estricta por alimentos ----------
 function generarCompra() {
-  var categorias = { "Proteínas": [], "Verduras": [], "Hidratos": [], "Otros": [] };
-  var prot = defaults.prot.join("|").toLowerCase();
-  var verd = defaults.verd.join("|").toLowerCase();
-  var hidr = defaults.hidr.join("|").toLowerCase();
+  var categorias = { "Proteínas": [], "Verduras": [], "Hidratos": [] };
+  var prot = loadFoods("prot").map(x=>x.toLowerCase());
+  var verd = loadFoods("verd").map(x=>x.toLowerCase());
+  var hidr = loadFoods("hidr").map(x=>x.toLowerCase());
+
+  function add(cat,item) {
+    if (categorias[cat].indexOf(item) === -1) categorias[cat].push(item);
+  }
 
   for (var i=0;i<7;i++) {
     var d = new Date(today.getTime());
@@ -239,17 +244,10 @@ function generarCompra() {
     var key = d.toISOString().slice(0,10);
     if (DATA[key]) {
       for (var j=0;j<DATA[key].length;j++) {
-        var desc = DATA[key][j].description || "";
-        var parts = desc.split(",");
-        for (var p=0;p<parts.length;p++) {
-          var item = parts[p].trim();
-          if (!item) continue;
-          var low = item.toLowerCase();
-          if (prot.indexOf(low) !== -1) categorias["Proteínas"].push(item);
-          else if (verd.indexOf(low) !== -1) categorias["Verduras"].push(item);
-          else if (hidr.indexOf(low) !== -1) categorias["Hidratos"].push(item);
-          else categorias["Otros"].push(item);
-        }
+        var desc = (DATA[key][j].description || "").toLowerCase();
+        prot.forEach(f=>{ if (desc.includes(f)) add("Proteínas", f); });
+        verd.forEach(f=>{ if (desc.includes(f)) add("Verduras", f); });
+        hidr.forEach(f=>{ if (desc.includes(f)) add("Hidratos", f); });
       }
     }
   }
@@ -259,16 +257,20 @@ function generarCompra() {
 
   for (var cat in categorias) {
     if (categorias[cat].length === 0) continue;
-    var div = document.createElement("div");
-    div.className = "cat";
-    var html = "<h3>" + cat + "</h3><ul>";
-    for (var k=0;k<categorias[cat].length;k++) {
-      html += "<li><label><input type='checkbox'> " + categorias[cat][k] + "</label></li>";
-    }
-    html += "</ul>";
-    div.innerHTML = html;
-    cont.appendChild(div);
+    var html = "<div class='cat'><h3>"+cat+"</h3><ul>";
+    categorias[cat].forEach(item=>{
+      var key = cat + "_" + item;
+      var checked = localStorage.getItem("check_"+key) ? "checked" : "";
+      html += "<li><label><input type='checkbox' onchange=\"toggleCheck('"+key+"')\" "+checked+"> "+item+"</label></li>";
+    });
+    html += "</ul></div>";
+    cont.innerHTML += html;
   }
+}
+
+function toggleCheck(k) {
+  if (localStorage.getItem("check_"+k)) localStorage.removeItem("check_"+k);
+  else localStorage.setItem("check_"+k,"1");
 }
 
 generarCompra();
