@@ -14,6 +14,7 @@ section { display:none; padding:14px; }
 section.active { display:block; }
 .card { background:white; padding:14px; border-radius:14px; margin-bottom:12px; }
 .grid { display:grid; grid-template-columns: repeat(7,1fr); gap:6px; }
+.weekdays { display:grid; grid-template-columns: repeat(7,1fr); font-size:12px; text-align:center; margin-bottom:6px; color:#666;}
 .day { background:#eee; padding:10px; border-radius:10px; font-size:12px; text-align:center; cursor:pointer; }
 .day.planned { background:#d9ead3; }
 .day.completed { background:#93c47d; }
@@ -23,6 +24,8 @@ ul { padding-left:18px;}
 button.primary { background:black; color:white; border:none; padding:10px; border-radius:10px; margin-top:10px; width:100%; }
 .small { font-size:13px; color:#666; }
 .selectors { display:flex; gap:8px; margin-bottom:10px; }
+.cat { margin-bottom:12px; }
+.cat h3 { margin-bottom:4px; }
 </style>
 </head>
 <body>
@@ -55,6 +58,9 @@ button.primary { background:black; color:white; border:none; padding:10px; borde
   <select id="monthSelect"></select>
   <select id="yearSelect"></select>
 </div>
+<div class="weekdays">
+  <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+</div>
 <div id="calendar" class="grid"></div>
 </div>
 <div class="card">
@@ -71,9 +77,8 @@ button.primary { background:black; color:white; border:none; padding:10px; borde
 
 <section id="compra">
 <div class="card">
-<h2>🛒 Lista de compra semanal real</h2>
-<ul id="listaCompra"></ul>
-<p class="small">Basada en alimentos dentro de la descripción del menú.</p>
+<h2>🛒 Lista de compra semanal</h2>
+<div id="compraContenido"></div>
 </div>
 </section>
 
@@ -115,7 +120,7 @@ function updateStatus() {
     localStorage.getItem("done_"+todayKey) ? "Estado: día completado" : "Estado: pendiente";
 }
 
-// Calendario
+// Calendario lunes-domingo
 var monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 var monthSelect = document.getElementById("monthSelect");
 var yearSelect = document.getElementById("yearSelect");
@@ -148,6 +153,7 @@ function renderMonth() {
   var cont = document.getElementById("calendar");
   cont.innerHTML = "";
   var first = new Date(y,m,1).getDay();
+  first = (first + 6) % 7;
   var days = new Date(y,m+1,0).getDate();
 
   for (var i=0;i<first;i++) cont.innerHTML += "<div></div>";
@@ -220,9 +226,13 @@ renderFoods("prot");
 renderFoods("verd");
 renderFoods("hidr");
 
-// Compra semanal
+// Compra categorizada
 function generarCompra() {
-  var items = {};
+  var categorias = { "Proteínas": [], "Verduras": [], "Hidratos": [], "Otros": [] };
+  var prot = defaults.prot.join("|").toLowerCase();
+  var verd = defaults.verd.join("|").toLowerCase();
+  var hidr = defaults.hidr.join("|").toLowerCase();
+
   for (var i=0;i<7;i++) {
     var d = new Date(today.getTime());
     d.setDate(today.getDate()+i);
@@ -233,17 +243,31 @@ function generarCompra() {
         var parts = desc.split(",");
         for (var p=0;p<parts.length;p++) {
           var item = parts[p].trim();
-          if (item.length > 2) items[item] = true;
+          if (!item) continue;
+          var low = item.toLowerCase();
+          if (prot.indexOf(low) !== -1) categorias["Proteínas"].push(item);
+          else if (verd.indexOf(low) !== -1) categorias["Verduras"].push(item);
+          else if (hidr.indexOf(low) !== -1) categorias["Hidratos"].push(item);
+          else categorias["Otros"].push(item);
         }
       }
     }
   }
-  var ul = document.getElementById("listaCompra");
-  ul.innerHTML = "";
-  for (var k in items) {
-    var li = document.createElement("li");
-    li.innerText = "☐ " + k;
-    ul.appendChild(li);
+
+  var cont = document.getElementById("compraContenido");
+  cont.innerHTML = "";
+
+  for (var cat in categorias) {
+    if (categorias[cat].length === 0) continue;
+    var div = document.createElement("div");
+    div.className = "cat";
+    var html = "<h3>" + cat + "</h3><ul>";
+    for (var k=0;k<categorias[cat].length;k++) {
+      html += "<li><label><input type='checkbox'> " + categorias[cat][k] + "</label></li>";
+    }
+    html += "</ul>";
+    div.innerHTML = html;
+    cont.appendChild(div);
   }
 }
 
