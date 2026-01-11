@@ -5,21 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mi Planner Saludable</title>
 
+
 <style>
-body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; background:#f2f2f7; margin:0; }
-header { background:#000; color:#fff; padding:14px; text-align:center; }
-nav { display:flex; background:#111; }
-nav button { flex:1; padding:12px; color:#fff; background:#111; border:none; font-size:15px; }
-nav button.active { background:#333; }
+body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; background:#f4f9ff; margin:0; }
+header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:#fff; padding:16px; text-align:center; }
+nav { display:flex; background:#0d2b45; }
+nav button { flex:1; padding:12px; color:#fff; background:#0d2b45; border:none; font-size:15px; }
+nav button.active { background:#123e63; }
 section { display:none; padding:14px; }
 section.active { display:block; }
-.card { background:#fff; padding:14px; border-radius:16px; margin-bottom:14px; box-shadow:0 2px 6px rgba(0,0,0,.05); }
+.card { background:#fff; padding:14px; border-radius:18px; margin-bottom:14px; box-shadow:0 4px 10px rgba(0,0,0,.06); }
 
-/* Calendario */
-.grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
-.day { background:#f0f0f0; padding:10px 0; border-radius:10px; font-size:13px; text-align:center; cursor:pointer; }
+.complete-btn {
+  background: linear-gradient(135deg,#28a745,#5ddf7a);
+  border:none;
+  color:white;
+  padding:10px 14px;
+  border-radius:14px;
+  font-weight:bold;
+  width:100%;
+  margin-top:10px;
+}
+.complete-btn.off { background:#ccc; color:#333; }
 
-/* Alimentos compacto */
+.weekdays { display:grid; grid-template-columns:repeat(7,1fr); font-weight:bold; font-size:12px; text-align:center; margin-top:10px; }
+.grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:6px; }
+.day { background:#eef3f8; padding:10px 0; border-radius:12px; font-size:13px; text-align:center; cursor:pointer; }
+.day.completed { background:#a7f3b5; font-weight:bold; }
+.day.today { border:2px solid #0072ff; }
+
 #alimentosContenido h3 { margin:16px 0 6px; font-size:16px; border-bottom:1px solid #eee; padding-bottom:4px; }
 #alimentosContenido ul { padding:0; margin:0 0 12px 0; }
 #alimentosContenido li {
@@ -28,21 +42,20 @@ section.active { display:block; }
   align-items:center;
   gap:8px;
   padding:6px 8px;
-  border-radius:10px;
+  border-radius:12px;
   margin-bottom:4px;
-  background:#f9f9f9;
+  background:#f9fcff;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
 #alimentosContenido li span { flex:1; overflow:hidden; text-overflow:ellipsis; }
-#alimentosContenido li.comprado { text-decoration:line-through; color:#777; background:#e6ffe6; }
+#alimentosContenido li.comprado { text-decoration:line-through; color:#666; background:#dffbe7; }
 #alimentosContenido input[type="checkbox"] { transform:scale(1.1); }
-#alimentosContenido button { background:#ffeded; border:none; border-radius:8px; padding:4px 8px; cursor:pointer; }
-#alimentosContenido input[type="text"], #alimentosContenido input:not([type]) {
-  width:70%; padding:6px; border-radius:8px; border:1px solid #ddd; margin-top:4px;
-}
+#alimentosContenido button { background:#ffe5e5; border:none; border-radius:10px; padding:4px 8px; cursor:pointer; }
+#alimentosContenido input[type="text"] { width:70%; padding:6px; border-radius:10px; border:1px solid #ddd; margin-top:4px; }
 </style>
+
 </head>
 <body>
 
@@ -65,7 +78,7 @@ section.active { display:block; }
       <strong id="monthLabel"></strong>
       <button onclick="nextMonth()">▶</button>
     </div>
-    <div id="calendar" class="grid" style="margin-top:10px;"></div>
+    <div class="weekdays"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div><div id="calendar" class="grid"></div>
   </div>
   <div class="card">
     <h3 id="detailTitle">Selecciona un día</h3>
@@ -100,7 +113,13 @@ function renderHoy() {
     });
     html += "</ul>";
   }
+  
+  const completed = isCompleted(today);
+  html += `<button class="complete-btn ${completed?"":"off"}" onclick="toggleCompleted('${today}')">
+    ${completed?"✅ Día completado":"⬜ Marcar día como completado"}
+  </button>`;
   document.getElementById("hoyContenido").innerHTML = html;
+
 }
 
 // CALENDARIO
@@ -116,7 +135,9 @@ function renderCalendar() {
   for(let i=0;i<first;i++) cont.innerHTML+="<div></div>";
   for(let d=1;d<=days;d++) {
     const key=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
-    cont.innerHTML+=`<div class="day" onclick="showDay('${key}')">${d}</div>`;
+    const completed = isCompleted(key) ? "completed" : "";
+    const todayClass = key === new Date().toISOString().slice(0,10) ? "today" : "";
+    cont.innerHTML+=`<div class="day ${completed} ${todayClass}" onclick="showDay('${key}')">${d}</div>`;`;
   }
 }
 
@@ -184,7 +205,17 @@ function removeFood(cat,i) {
   renderAlimentos();
 }
 
+
+// === COMPLETADO POR DÍA ===
+function isCompleted(date){ return localStorage.getItem("done_"+date)==="1"; }
+function toggleCompleted(date){
+  if(isCompleted(date)) localStorage.removeItem("done_"+date);
+  else localStorage.setItem("done_"+date,"1");
+  renderHoy(); renderCalendar();
+}
+
 // INIT
+
 renderHoy();
 renderCalendar();
 renderAlimentos();
