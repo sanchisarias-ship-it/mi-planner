@@ -4,55 +4,26 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mi Planner Saludable</title>
-
 <style>
-body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; background:#f4f9ff; margin:0; }
-header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:#fff; padding:16px; text-align:center; }
+body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f4f9ff; }
+header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:16px; text-align:center; }
 nav { display:flex; background:#0d2b45; }
-nav button { flex:1; padding:12px; color:#fff; background:#0d2b45; border:none; font-size:15px; }
+nav button { flex:1; padding:12px; border:none; background:#0d2b45; color:white; font-size:15px; }
 nav button.active { background:#123e63; }
 section { display:none; padding:14px; }
 section.active { display:block; }
-.card { background:#fff; padding:14px; border-radius:18px; margin-bottom:14px; box-shadow:0 4px 10px rgba(0,0,0,.06); }
+.card { background:white; padding:14px; border-radius:16px; margin-bottom:12px; box-shadow:0 4px 8px rgba(0,0,0,.06); }
 
-.complete-btn {
-  background: linear-gradient(135deg,#28a745,#5ddf7a);
-  border:none;
-  color:white;
-  padding:10px 14px;
-  border-radius:14px;
-  font-weight:bold;
-  width:100%;
-  margin-top:10px;
-}
-.complete-btn.off { background:#ccc; color:#333; }
+.grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+.day { background:#e9f1f9; padding:10px; border-radius:12px; text-align:center; font-size:13px; cursor:pointer; }
+.today { border:2px solid #0072ff; }
+.event { background:#eef7ff; padding:6px 10px; border-radius:10px; margin:6px 0; font-size:14px; }
 
-.weekdays { display:grid; grid-template-columns:repeat(7,1fr); font-weight:bold; font-size:12px; text-align:center; margin-top:10px; }
-.grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:6px; }
-.day { background:#eef3f8; padding:10px 0; border-radius:12px; font-size:13px; text-align:center; cursor:pointer; }
-.day.completed { background:#a7f3b5; font-weight:bold; }
-.day.today { border:2px solid #0072ff; }
+.weekdays { display:grid; grid-template-columns:repeat(7,1fr); font-size:12px; font-weight:bold; text-align:center; margin-bottom:6px; }
 
-#alimentosContenido h3 { margin:16px 0 6px; font-size:16px; border-bottom:1px solid #eee; padding-bottom:4px; }
-#alimentosContenido ul { padding:0; margin:0 0 12px 0; }
-#alimentosContenido li {
-  list-style:none;
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 8px;
-  border-radius:12px;
-  margin-bottom:4px;
-  background:#f9fcff;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-#alimentosContenido li span { flex:1; overflow:hidden; text-overflow:ellipsis; }
-#alimentosContenido li.comprado { text-decoration:line-through; color:#666; background:#dffbe7; }
-#alimentosContenido input[type="checkbox"] { transform:scale(1.1); }
-#alimentosContenido button { background:#ffe5e5; border:none; border-radius:10px; padding:4px 8px; cursor:pointer; }
-#alimentosContenido input[type="text"] { width:70%; padding:6px; border-radius:10px; border:1px solid #ddd; margin-top:4px; }
+li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9fcff; padding:6px 10px; border-radius:10px; margin-bottom:4px; }
+li span { flex:1; }
+li.checked { text-decoration: line-through; background:#dffbe7; }
 </style>
 </head>
 <body>
@@ -66,7 +37,10 @@ section.active { display:block; }
 </nav>
 
 <section id="hoy" class="active">
-  <div class="card" id="hoyContenido"></div>
+  <div class="card">
+    <h3>Hoy</h3>
+    <div id="todayEvents">Cargando...</div>
+  </div>
 </section>
 
 <section id="calendario">
@@ -81,28 +55,20 @@ section.active { display:block; }
     </div>
     <div id="calendar" class="grid"></div>
   </div>
+
   <div class="card">
-    <h3 id="detailTitle">Selecciona un día</h3>
-    <div id="detailContent"></div>
+    <h3 id="selectedDate">Selecciona un día</h3>
+    <div id="dayEvents"></div>
   </div>
 </section>
 
 <section id="alimentos">
-  <div class="card" id="alimentosContenido"></div>
+  <div class="card" id="foodContainer">Cargando alimentos...</div>
 </section>
 
 <script>
-const DATA = {
-  "2026-01-01": [{time:"08:00", summary:"Bici suave", description:"45 min zona 2"}],
-  "2026-01-02": [{time:"09:00", summary:"TRX fuerza", description:"Parte superior"}]
-};
-
-const BASE = {
-  "Proteínas": ["Pollo","Huevos","Atún"],
-  "Verduras": ["Brócoli","Tomate","Espinacas"],
-  "Hidratos": ["Arroz","Avena","Patata"],
-  "Grasas saludables": ["Aceite de oliva","Nueces","Aguacate"]
-};
+let eventsByDate = {};
+let current = new Date();
 
 function showTab(id,btn){
   document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
@@ -111,114 +77,97 @@ function showTab(id,btn){
   btn.classList.add("active");
 }
 
-function isCompleted(date){ return localStorage.getItem("done_"+date)==="1"; }
-function toggleCompleted(date){
-  if(isCompleted(date)) localStorage.removeItem("done_"+date);
-  else localStorage.setItem("done_"+date,"1");
-  renderHoy(); renderCalendar();
+// --- ICS ---
+async function loadICS(){
+  const res = await fetch("plan_anual_completo_365_dias.ics");
+  const text = await res.text();
+  parseICS(text);
+  renderToday();
+  renderCalendar();
 }
 
-function renderHoy(){
+function parseICS(text){
+  const blocks = text.split("BEGIN:VEVENT");
+  blocks.forEach(b=>{
+    if(!b.includes("SUMMARY")) return;
+    const summary = (b.match(/SUMMARY:(.+)/)||[])[1];
+    const dt = (b.match(/DTSTART:(\d{8})T(\d{6})/)||[]);
+    if(!summary || !dt[1]) return;
+    const date = dt[1].slice(0,4)+"-"+dt[1].slice(4,6)+"-"+dt[1].slice(6,8);
+    const time = dt[2].slice(0,2)+":"+dt[2].slice(2,4);
+    if(!eventsByDate[date]) eventsByDate[date]=[];
+    eventsByDate[date].push(time+" - "+summary);
+  });
+}
+
+function renderToday(){
   const today = new Date().toISOString().slice(0,10);
-  let html = "<h2>Hoy</h2>";
-  if (!DATA[today]) html += "<p>Sin eventos hoy</p>";
-  else {
-    html += "<ul>";
-    DATA[today].forEach(e=>{
-      html += "<li><b>"+e.time+"</b> - "+e.summary+"<br>"+(e.description||"")+"</li>";
-    });
-    html += "</ul>";
-  }
-  const completed = isCompleted(today);
-  html += `<button class="complete-btn ${completed?"":"off"}" onclick="toggleCompleted('${today}')">
-    ${completed?"✅ Día completado":"⬜ Marcar día como completado"}
-  </button>`;
-  document.getElementById("hoyContenido").innerHTML = html;
+  const cont = document.getElementById("todayEvents");
+  cont.innerHTML = "";
+  (eventsByDate[today]||["Sin eventos"]).forEach(e=>{
+    cont.innerHTML += "<div class='event'>"+e+"</div>";
+  });
 }
 
-let current = new Date();
 function renderCalendar(){
   const y=current.getFullYear(), m=current.getMonth();
   document.getElementById("monthLabel").innerText =
     current.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+
   const first=(new Date(y,m,1).getDay()+6)%7;
   const days=new Date(y,m+1,0).getDate();
-  let cont=document.getElementById("calendar");
-  cont.innerHTML="";
-  for(let i=0;i<first;i++) cont.innerHTML+="<div></div>";
+  const cal=document.getElementById("calendar");
+  cal.innerHTML="";
+  for(let i=0;i<first;i++) cal.innerHTML+="<div></div>";
+
   for(let d=1;d<=days;d++){
-    const key=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
-    const completed = isCompleted(key) ? "completed" : "";
-    const todayClass = key === new Date().toISOString().slice(0,10) ? "today" : "";
-    cont.innerHTML+=`<div class="day ${completed} ${todayClass}" onclick="showDay('${key}')">${d}</div>`;
+    const date=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    const todayClass = date===new Date().toISOString().slice(0,10) ? "today" : "";
+    cal.innerHTML+=`<div class="day ${todayClass}" onclick="showDay('${date}')">${d}</div>`;
   }
 }
 
-function showDay(key){
-  document.getElementById("detailTitle").innerText = key;
-  if(!DATA[key]) { document.getElementById("detailContent").innerText="Sin eventos"; return; }
-  let html="<ul>";
-  DATA[key].forEach(e=>html+=`<li><b>${e.time}</b> - ${e.summary}<br>${e.description||""}</li>`);
-  html+="</ul>";
-  document.getElementById("detailContent").innerHTML=html;
+function showDay(date){
+  document.getElementById("selectedDate").innerText = date;
+  const cont=document.getElementById("dayEvents");
+  cont.innerHTML="";
+  (eventsByDate[date]||["Sin eventos"]).forEach(e=>{
+    cont.innerHTML += "<div class='event'>"+e+"</div>";
+  });
 }
 
 function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
 function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
 
-function getCats(){
-  if(!localStorage.getItem("cats")) localStorage.setItem("cats", JSON.stringify(BASE));
-  return JSON.parse(localStorage.getItem("cats"));
-}
-function saveCats(c){ localStorage.setItem("cats", JSON.stringify(c)); }
-
-function renderAlimentos(){
-  const cats=getCats();
-  let html="";
-  for(let cat in cats){
-    html+=`<h3>${cat}</h3><ul>`;
-    cats[cat].forEach((item,i)=>{
-      const key="check_"+item;
-      const checked=localStorage.getItem(key)?"checked":"";
-      const comprado=localStorage.getItem(key)?"comprado":"";
-      html+=`
-      <li class="${comprado}">
-        <input type="checkbox" onchange="toggleCheck('${key}',this)" ${checked}>
-        <span>${item}</span>
-        <button onclick="removeFood('${cat}',${i})">❌</button>
-      </li>`;
+// --- ALIMENTOS ---
+async function loadFoods(){
+  const res = await fetch("ALIMENTOS SALUDABLES.json");
+  const data = await res.json();
+  const cont = document.getElementById("foodContainer");
+  cont.innerHTML = "";
+  Object.keys(data).forEach(cat=>{
+    cont.innerHTML += `<h3>${cat}</h3>`;
+    data[cat].forEach(item=>{
+      const key = cat+"_"+item;
+      const checked = localStorage.getItem(key) ? "checked" : "";
+      const cls = localStorage.getItem(key) ? "checked" : "";
+      cont.innerHTML += `
+        <li class="${cls}">
+          <input type="checkbox" onchange="toggleFood('${key}', this)" ${checked}>
+          <span>${item}</span>
+        </li>`;
     });
-    html+=`</ul>
-    <input id="in_${cat}" placeholder="Añadir alimento">
-    <button onclick="addFood('${cat}')">Añadir</button>`;
-  }
-  document.getElementById("alimentosContenido").innerHTML=html;
+  });
 }
 
-function toggleCheck(key,cb){
-  if(cb.checked){ localStorage.setItem(key,"1"); cb.parentElement.classList.add("comprado"); }
-  else { localStorage.removeItem(key); cb.parentElement.classList.remove("comprado"); }
+function toggleFood(key,cb){
+  if(cb.checked) localStorage.setItem(key,"1");
+  else localStorage.removeItem(key);
+  loadFoods();
 }
 
-function addFood(cat){
-  const cats=getCats();
-  const val=document.getElementById("in_"+cat).value.trim();
-  if(!val) return;
-  cats[cat].push(val);
-  saveCats(cats);
-  renderAlimentos();
-}
-
-function removeFood(cat,i){
-  const cats=getCats();
-  cats[cat].splice(i,1);
-  saveCats(cats);
-  renderAlimentos();
-}
-
-renderHoy();
-renderCalendar();
-renderAlimentos();
+loadICS();
+loadFoods();
 </script>
 </body>
 </html>
