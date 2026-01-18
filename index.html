@@ -79,20 +79,17 @@ td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:l
       <select id="categoriaSelect"></select>
       <button class="primary" onclick="addFood()">Añadir</button>
     </div>
-    <p class="small">Marca los alimentos para usarlos como lista rápida.</p>
+    <p class="small">Marca los alimentos que quieres comprar esta semana.</p>
   </div>
   <div class="card" id="foodContainer">Cargando alimentos...</div>
 </section>
 
 <section id="compra">
   <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <button onclick="cambiarSemana(-1)">◀ Semana</button>
-      <strong id="weekLabel"></strong>
-      <button onclick="cambiarSemana(1)">Semana ▶</button>
-    </div>
+    <h3>🛒 Lista de compra (alimentos marcados)</h3>
+    <p class="small">Aquí aparecen solo los alimentos que has marcado en la pestaña Alimentos.</p>
   </div>
-  <div class="card" id="listaCompra">Calculando lista...</div>
+  <div class="card" id="listaCompra">Sin elementos seleccionados.</div>
 </section>
 
 <section id="seguimiento">
@@ -129,13 +126,13 @@ let eventsByDate = {};
 let current = new Date();
 let chart;
 let alimentosData = {};
-let weekOffset = 0;
 
 function showTab(id,btn){
   document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
   document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
   document.getElementById(id).classList.add("active");
   btn.classList.add("active");
+  if(id==="compra") renderCompra();
 }
 
 // --------- ICS ----------
@@ -153,7 +150,7 @@ async function loadICS(){
       if(!eventsByDate[date]) eventsByDate[date]=[];
       eventsByDate[date].push(time+" - "+summary);
     });
-    renderToday(); renderCalendar(); renderCompra();
+    renderToday(); renderCalendar();
   }catch(e){}
 }
 
@@ -186,9 +183,6 @@ function showDay(date){
   cont.innerHTML="";
   (eventsByDate[date]||["Sin eventos"]).forEach(e=> cont.innerHTML += "<div class='event'>"+e+"</div>");
 }
-
-function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
-function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
 
 // -------- ALIMENTOS --------
 async function loadFoods(){
@@ -233,6 +227,7 @@ function toggleCheck(key){
   checks[key] = !checks[key];
   localStorage.setItem("foodChecks", JSON.stringify(checks));
   renderFoods();
+  renderCompra();
 }
 
 function addFood(){
@@ -249,48 +244,24 @@ function removeFood(cat,index){
   alimentosData[cat].splice(index,1);
   localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
   renderFoods();
+  renderCompra();
 }
 
-// -------- LISTA COMPRA --------
-function cambiarSemana(dir){ weekOffset += dir; renderCompra(); }
-
-function inicioSemana(date){
-  const d = new Date(date);
-  const day = (d.getDay()+6)%7;
-  d.setDate(d.getDate()-day);
-  return d;
-}
-
+// -------- LISTA COMPRA DESDE MARCADOS --------
 function renderCompra(){
-  const base = inicioSemana(new Date());
-  base.setDate(base.getDate() + weekOffset*7);
-  const end = new Date(base); end.setDate(base.getDate()+6);
+  const cont = document.getElementById("listaCompra");
+  const checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
+  const items = Object.keys(checks).filter(k=>checks[k]);
 
-  document.getElementById("weekLabel").innerText =
-    base.toLocaleDateString("es-ES") + " - " + end.toLocaleDateString("es-ES");
-
-  const counts = {};
-  for(let i=0;i<7;i++){
-    const d = new Date(base); d.setDate(base.getDate()+i);
-    const key = d.toISOString().slice(0,10);
-    (eventsByDate[key]||[]).forEach(ev=>{
-      if(ev.includes("Desayuno")||ev.includes("Comida")||ev.includes("Cena")||ev.includes("Merienda")||ev.includes("Media")){
-        const foods = ev.split(":")[1]||"";
-        foods.split(/[,+y]/i).forEach(f=>{
-          const item = f.trim().toLowerCase();
-          if(!item) return;
-          counts[item] = (counts[item]||0)+1;
-        });
-      }
-    });
+  if(items.length===0){
+    cont.innerHTML = "No has marcado ningún alimento todavía.";
+    return;
   }
 
-  const cont = document.getElementById("listaCompra");
-  if(Object.keys(counts).length===0){ cont.innerHTML="Sin datos para esta semana"; return; }
-
-  cont.innerHTML = "<h3>Lista semanal</h3>";
-  Object.keys(counts).sort().forEach(item=>{
-    cont.innerHTML += `<li><span>${item}</span><strong>x${counts[item]}</strong></li>`;
+  cont.innerHTML = "";
+  items.forEach(k=>{
+    const name = k.split("_").slice(1).join("_");
+    cont.innerHTML += `<li><span>${name}</span></li>`;
   });
 }
 
