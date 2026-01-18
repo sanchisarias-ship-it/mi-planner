@@ -8,7 +8,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f4f9ff; }
-header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:16px; text-align:center; }
+header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:12px; text-align:center; display:flex; align-items:center; justify-content:center; gap:12px;}
+header img { width:48px; height:48px; border-radius:12px; }
 nav { display:flex; background:#0d2b45; }
 nav button { flex:1; padding:12px; border:none; background:#0d2b45; color:white; font-size:15px; }
 nav button.active { background:#123e63; }
@@ -27,10 +28,8 @@ li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9f
 li span { flex:1; }
 li.checked { text-decoration: line-through; background:#dffbe7; }
 
-input, button { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:16px; }
+input, button, select { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:15px; }
 button.primary { background:#0072ff; color:white; border:none; }
-table { width:100%; border-collapse:collapse; }
-td, th { padding:8px; border-bottom:1px solid #eee; text-align:left; font-size:14px; }
 .small { font-size:13px; color:#666; }
 
 .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; text-align:center; }
@@ -39,7 +38,10 @@ td, th { padding:8px; border-bottom:1px solid #eee; text-align:left; font-size:1
 </head>
 <body>
 
-<header><h1>🚴‍♂️ Mi Planner Saludable</h1></header>
+<header>
+  <img src="apple-touch-icon.png" alt="Icono">
+  <h2>Mi Planner Saludable</h2>
+</header>
 
 <nav>
   <button class="active" onclick="showTab('hoy',this)">Hoy</button>
@@ -66,6 +68,14 @@ td, th { padding:8px; border-bottom:1px solid #eee; text-align:left; font-size:1
 </section>
 
 <section id="alimentos">
+  <div class="card">
+    <h3>➕ Añadir alimento</h3>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <input id="nuevoAlimento" placeholder="Ej: Aguacate">
+      <select id="categoriaSelect"></select>
+      <button class="primary" onclick="addFood()">Añadir</button>
+    </div>
+  </div>
   <div class="card" id="foodContainer">Cargando alimentos...</div>
 </section>
 
@@ -78,9 +88,7 @@ td, th { padding:8px; border-bottom:1px solid #eee; text-align:left; font-size:1
     </div>
   </div>
 
-  <div class="card">
-    <canvas id="pesoChart" height="120"></canvas>
-  </div>
+  <div class="card"><canvas id="pesoChart" height="120"></canvas></div>
 
   <div class="card">
     <h3>Medias</h3>
@@ -90,20 +98,13 @@ td, th { padding:8px; border-bottom:1px solid #eee; text-align:left; font-size:1
       <div class="stat" id="mediaAnual">Anual: -</div>
     </div>
   </div>
-
-  <div class="card">
-    <h3>Historial</h3>
-    <table>
-      <thead><tr><th>Fecha</th><th>Peso</th><th></th></tr></thead>
-      <tbody id="tablaPesos"></tbody>
-    </table>
-  </div>
 </section>
 
 <script>
 let eventsByDate = {};
 let current = new Date();
 let chart;
+let alimentosData = {};
 
 function showTab(id,btn){
   document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
@@ -112,26 +113,23 @@ function showTab(id,btn){
   btn.classList.add("active");
 }
 
+// --------- ICS ----------
 async function loadICS(){
   try{
     const res = await fetch("plan_anual_completo_365_dias.ics");
     const text = await res.text();
-    parseICS(text);
+    const blocks = text.split("BEGIN:VEVENT");
+    blocks.forEach(b=>{
+      const summary = (b.match(/SUMMARY:(.+)/)||[])[1];
+      const dt = (b.match(/DTSTART:(\d{8})T(\d{6})/)||[]);
+      if(!summary||!dt[1]) return;
+      const date = dt[1].slice(0,4)+"-"+dt[1].slice(4,6)+"-"+dt[1].slice(6,8);
+      const time = dt[2].slice(0,2)+":"+dt[2].slice(2,4);
+      if(!eventsByDate[date]) eventsByDate[date]=[];
+      eventsByDate[date].push(time+" - "+summary);
+    });
     renderToday(); renderCalendar();
   }catch(e){}
-}
-
-function parseICS(text){
-  const blocks = text.split("BEGIN:VEVENT");
-  blocks.forEach(b=>{
-    const summary = (b.match(/SUMMARY:(.+)/)||[])[1];
-    const dt = (b.match(/DTSTART:(\d{8})T(\d{6})/)||[]);
-    if(!summary||!dt[1]) return;
-    const date = dt[1].slice(0,4)+"-"+dt[1].slice(4,6)+"-"+dt[1].slice(6,8);
-    const time = dt[2].slice(0,2)+":"+dt[2].slice(2,4);
-    if(!eventsByDate[date]) eventsByDate[date]=[];
-    eventsByDate[date].push(time+" - "+summary);
-  });
 }
 
 function renderToday(){
@@ -167,33 +165,56 @@ function showDay(date){
 function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
 function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
 
+// -------- ALIMENTOS EDITABLES --------
 async function loadFoods(){
   try{
-    const res = await fetch("ALIMENTOS SALUDABLES.json");
-    const data = await res.json();
-    const cont = document.getElementById("foodContainer");
-    cont.innerHTML="";
-    Object.keys(data).forEach(cat=>{
-      cont.innerHTML += `<h3>${cat}</h3>`;
-      data[cat].forEach(item=>{
-        const key = cat+"_"+item;
-        const checked = localStorage.getItem(key) ? "checked" : "";
-        const cls = localStorage.getItem(key) ? "checked" : "";
-        cont.innerHTML += `<li class="${cls}">
-          <input type="checkbox" onchange="toggleFood('${key}', this)" ${checked}>
-          <span>${item}</span></li>`;
-      });
+    const local = localStorage.getItem("alimentosData");
+    if(local){
+      alimentosData = JSON.parse(local);
+    } else {
+      const res = await fetch("ALIMENTOS SALUDABLES.json");
+      alimentosData = await res.json();
+      localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
+    }
+    renderFoods();
+  }catch(e){
+    document.getElementById("foodContainer").innerHTML = "No se pudieron cargar alimentos.";
+  }
+}
+
+function renderFoods(){
+  const cont = document.getElementById("foodContainer");
+  const select = document.getElementById("categoriaSelect");
+  cont.innerHTML=""; select.innerHTML="";
+  Object.keys(alimentosData).forEach(cat=>{
+    select.innerHTML += `<option value="${cat}">${cat}</option>`;
+    cont.innerHTML += `<h3>${cat}</h3>`;
+    alimentosData[cat].forEach((item,i)=>{
+      cont.innerHTML += `<li>
+        <span>${item}</span>
+        <button onclick="removeFood('${cat}',${i})">🗑️</button>
+      </li>`;
     });
-  }catch(e){}
+  });
 }
 
-function toggleFood(key,cb){
-  if(cb.checked) localStorage.setItem(key,"1");
-  else localStorage.removeItem(key);
-  loadFoods();
+function addFood(){
+  const name = document.getElementById("nuevoAlimento").value.trim();
+  const cat = document.getElementById("categoriaSelect").value;
+  if(!name) return alert("Introduce un alimento");
+  alimentosData[cat].push(name);
+  localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
+  document.getElementById("nuevoAlimento").value="";
+  renderFoods();
 }
 
-// ---- PESO ----
+function removeFood(cat,index){
+  alimentosData[cat].splice(index,1);
+  localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
+  renderFoods();
+}
+
+// -------- PESO + GRAFICAS --------
 function guardarPeso(){
   const v = parseFloat(document.getElementById("pesoInput").value);
   if(!v) return alert("Introduce peso válido");
@@ -205,34 +226,17 @@ function guardarPeso(){
   renderPesos();
 }
 
-function borrarPeso(fecha){
-  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
-  delete data[fecha];
-  localStorage.setItem("pesos",JSON.stringify(data));
-  renderPesos();
-}
-
 function renderPesos(){
   const data = JSON.parse(localStorage.getItem("pesos")||"{}");
   const fechas = Object.keys(data).sort();
   const pesos = fechas.map(f=>data[f]);
-
-  const tbody=document.getElementById("tablaPesos");
-  tbody.innerHTML="";
-  fechas.forEach(f=> tbody.innerHTML += `<tr><td>${f}</td><td>${data[f]} kg</td><td><button onclick="borrarPeso('${f}')">❌</button></td></tr>`);
-
-  renderChart(fechas,pesos);
-  calcularMedias(fechas,pesos);
-}
-
-function renderChart(labels,values){
-  const ctx=document.getElementById("pesoChart");
   if(chart) chart.destroy();
-  chart=new Chart(ctx,{
+  chart=new Chart(document.getElementById("pesoChart"),{
     type:"line",
-    data:{labels:labels,datasets:[{label:"Peso (kg)",data:values,tension:0.3,fill:true}]} ,
-    options:{responsive:true,plugins:{legend:{display:false}}}
+    data:{labels:fechas,datasets:[{data:pesos,fill:true,tension:0.3}]},
+    options:{plugins:{legend:{display:false}}}
   });
+  calcularMedias(fechas,pesos);
 }
 
 function calcularMedias(fechas,pesos){
