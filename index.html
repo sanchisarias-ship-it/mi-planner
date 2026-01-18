@@ -26,7 +26,7 @@ section.active { display:block; }
 
 li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9fcff; padding:6px 10px; border-radius:10px; margin-bottom:4px; }
 li span { flex:1; }
-li.checked { text-decoration: line-through; background:#dffbe7; }
+li.checked { text-decoration: line-through; background:#dffbe7; opacity:0.8; }
 
 input, button, select { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:15px; }
 button.primary { background:#0072ff; color:white; border:none; }
@@ -75,6 +75,7 @@ button.primary { background:#0072ff; color:white; border:none; }
       <select id="categoriaSelect"></select>
       <button class="primary" onclick="addFood()">Añadir</button>
     </div>
+    <p class="small">Marca los alimentos para usarlos como lista de compra.</p>
   </div>
   <div class="card" id="foodContainer">Cargando alimentos...</div>
 </section>
@@ -165,7 +166,7 @@ function showDay(date){
 function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
 function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
 
-// -------- ALIMENTOS EDITABLES --------
+// -------- ALIMENTOS CON CHECKLIST --------
 async function loadFoods(){
   try{
     const local = localStorage.getItem("alimentosData");
@@ -186,16 +187,28 @@ function renderFoods(){
   const cont = document.getElementById("foodContainer");
   const select = document.getElementById("categoriaSelect");
   cont.innerHTML=""; select.innerHTML="";
+  const checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
+
   Object.keys(alimentosData).forEach(cat=>{
     select.innerHTML += `<option value="${cat}">${cat}</option>`;
     cont.innerHTML += `<h3>${cat}</h3>`;
     alimentosData[cat].forEach((item,i)=>{
-      cont.innerHTML += `<li>
+      const key = cat+"_"+item;
+      const marcado = checks[key];
+      cont.innerHTML += `<li class="${marcado?'checked':''}">
+        <input type="checkbox" ${marcado?'checked':''} onchange="toggleCheck('${key}')">
         <span>${item}</span>
         <button onclick="removeFood('${cat}',${i})">🗑️</button>
       </li>`;
     });
   });
+}
+
+function toggleCheck(key){
+  let checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
+  checks[key] = !checks[key];
+  localStorage.setItem("foodChecks", JSON.stringify(checks));
+  renderFoods();
 }
 
 function addFood(){
