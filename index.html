@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mi Planner Saludable</title>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-
 <style>
 body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f4f9ff; }
 header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:16px; text-align:center; }
@@ -26,6 +25,12 @@ section.active { display:block; }
 li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9fcff; padding:6px 10px; border-radius:10px; margin-bottom:4px; }
 li span { flex:1; }
 li.checked { text-decoration: line-through; background:#dffbe7; }
+
+input, button { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:16px; }
+button.primary { background:#0072ff; color:white; border:none; }
+table { width:100%; border-collapse:collapse; }
+td, th { padding:8px; border-bottom:1px solid #eee; text-align:left; font-size:14px; }
+.small { font-size:13px; color:#666; }
 </style>
 </head>
 <body>
@@ -36,6 +41,7 @@ li.checked { text-decoration: line-through; background:#dffbe7; }
   <button class="active" onclick="showTab('hoy',this)">Hoy</button>
   <button onclick="showTab('calendario',this)">Calendario</button>
   <button onclick="showTab('alimentos',this)">Alimentos</button>
+  <button onclick="showTab('seguimiento',this)">Seguimiento</button>
 </nav>
 
 <section id="hoy" class="active">
@@ -68,6 +74,28 @@ li.checked { text-decoration: line-through; background:#dffbe7; }
   <div class="card" id="foodContainer">Cargando alimentos...</div>
 </section>
 
+<section id="seguimiento">
+  <div class="card">
+    <h3>📈 Seguimiento de peso</h3>
+    <p class="small">Introduce tu peso una vez al día para llevar un control de evolución.</p>
+
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <input type="number" step="0.1" id="pesoInput" placeholder="Peso (kg)">
+      <button class="primary" onclick="guardarPeso()">Guardar</button>
+    </div>
+
+    <div id="stats" class="small"></div>
+  </div>
+
+  <div class="card">
+    <h3>Historial</h3>
+    <table>
+      <thead><tr><th>Fecha</th><th>Peso</th><th></th></tr></thead>
+      <tbody id="tablaPesos"></tbody>
+    </table>
+  </div>
+</section>
+
 <script>
 let eventsByDate = {};
 let current = new Date();
@@ -79,13 +107,17 @@ function showTab(id,btn){
   btn.classList.add("active");
 }
 
-// --- ICS ---
+// ---------- CALENDARIO ICS ----------
 async function loadICS(){
-  const res = await fetch("plan_anual_completo_365_dias.ics");
-  const text = await res.text();
-  parseICS(text);
-  renderToday();
-  renderCalendar();
+  try{
+    const res = await fetch("plan_anual_completo_365_dias.ics");
+    const text = await res.text();
+    parseICS(text);
+    renderToday();
+    renderCalendar();
+  }catch(e){
+    document.getElementById("todayEvents").innerHTML = "No se pudo cargar el calendario.";
+  }
 }
 
 function parseICS(text){
@@ -141,25 +173,29 @@ function showDay(date){
 function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
 function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
 
-// --- ALIMENTOS ---
+// ---------- ALIMENTOS ----------
 async function loadFoods(){
-  const res = await fetch("ALIMENTOS SALUDABLES.json");
-  const data = await res.json();
-  const cont = document.getElementById("foodContainer");
-  cont.innerHTML = "";
-  Object.keys(data).forEach(cat=>{
-    cont.innerHTML += `<h3>${cat}</h3>`;
-    data[cat].forEach(item=>{
-      const key = cat+"_"+item;
-      const checked = localStorage.getItem(key) ? "checked" : "";
-      const cls = localStorage.getItem(key) ? "checked" : "";
-      cont.innerHTML += `
-        <li class="${cls}">
-          <input type="checkbox" onchange="toggleFood('${key}', this)" ${checked}>
-          <span>${item}</span>
-        </li>`;
+  try{
+    const res = await fetch("ALIMENTOS SALUDABLES.json");
+    const data = await res.json();
+    const cont = document.getElementById("foodContainer");
+    cont.innerHTML = "";
+    Object.keys(data).forEach(cat=>{
+      cont.innerHTML += `<h3>${cat}</h3>`;
+      data[cat].forEach(item=>{
+        const key = cat+"_"+item;
+        const checked = localStorage.getItem(key) ? "checked" : "";
+        const cls = localStorage.getItem(key) ? "checked" : "";
+        cont.innerHTML += `
+          <li class="${cls}">
+            <input type="checkbox" onchange="toggleFood('${key}', this)" ${checked}>
+            <span>${item}</span>
+          </li>`;
+      });
     });
-  });
+  }catch(e){
+    document.getElementById("foodContainer").innerHTML = "No se pudieron cargar los alimentos.";
+  }
 }
 
 function toggleFood(key,cb){
@@ -168,8 +204,56 @@ function toggleFood(key,cb){
   loadFoods();
 }
 
+// ---------- SEGUIMIENTO PESO ----------
+function guardarPeso(){
+  const input = document.getElementById("pesoInput");
+  const valor = parseFloat(input.value);
+  if(!valor) return alert("Introduce un peso válido");
+
+  const hoy = new Date().toISOString().slice(0,10);
+  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+  data[hoy] = valor;
+  localStorage.setItem("pesos", JSON.stringify(data));
+  input.value = "";
+  renderPesos();
+}
+
+function borrarPeso(fecha){
+  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+  delete data[fecha];
+  localStorage.setItem("pesos", JSON.stringify(data));
+  renderPesos();
+}
+
+function renderPesos(){
+  const tbody = document.getElementById("tablaPesos");
+  const stats = document.getElementById("stats");
+  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+
+  const fechas = Object.keys(data).sort();
+  tbody.innerHTML = "";
+
+  fechas.forEach(f=>{
+    tbody.innerHTML += `<tr>
+      <td>${f}</td>
+      <td>${data[f]} kg</td>
+      <td><button onclick="borrarPeso('${f}')">❌</button></td>
+    </tr>`;
+  });
+
+  if(fechas.length > 1){
+    const primero = data[fechas[0]];
+    const ultimo = data[fechas[fechas.length-1]];
+    const diff = (ultimo - primero).toFixed(1);
+    stats.innerHTML = "Evolución: " + (diff>0? "+"+diff: diff) + " kg desde el inicio.";
+  } else {
+    stats.innerHTML = "";
+  }
+}
+
 loadICS();
 loadFoods();
+renderPesos();
 </script>
 </body>
 </html>
