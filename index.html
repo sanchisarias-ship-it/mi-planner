@@ -11,7 +11,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; 
 header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:12px; text-align:center; display:flex; align-items:center; justify-content:center; gap:12px;}
 header img { width:48px; height:48px; border-radius:12px; }
 nav { display:flex; background:#0d2b45; }
-nav button { flex:1; padding:12px; border:none; background:#0d2b45; color:white; font-size:15px; }
+nav button { flex:1; padding:12px; border:none; background:#0d2b45; color:white; font-size:14px; }
 nav button.active { background:#123e63; }
 section { display:none; padding:14px; }
 section.active { display:block; }
@@ -34,6 +34,9 @@ button.primary { background:#0072ff; color:white; border:none; }
 
 .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; text-align:center; }
 .stat { background:#eef7ff; padding:10px; border-radius:12px; font-weight:bold; }
+
+table { width:100%; border-collapse:collapse; }
+td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:left; }
 </style>
 </head>
 <body>
@@ -47,6 +50,7 @@ button.primary { background:#0072ff; color:white; border:none; }
   <button class="active" onclick="showTab('hoy',this)">Hoy</button>
   <button onclick="showTab('calendario',this)">Calendario</button>
   <button onclick="showTab('alimentos',this)">Alimentos</button>
+  <button onclick="showTab('compra',this)">Lista compra</button>
   <button onclick="showTab('seguimiento',this)">Seguimiento</button>
 </nav>
 
@@ -75,9 +79,20 @@ button.primary { background:#0072ff; color:white; border:none; }
       <select id="categoriaSelect"></select>
       <button class="primary" onclick="addFood()">Añadir</button>
     </div>
-    <p class="small">Marca los alimentos para usarlos como lista de compra.</p>
+    <p class="small">Marca los alimentos para usarlos como lista rápida.</p>
   </div>
   <div class="card" id="foodContainer">Cargando alimentos...</div>
+</section>
+
+<section id="compra">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <button onclick="cambiarSemana(-1)">◀ Semana</button>
+      <strong id="weekLabel"></strong>
+      <button onclick="cambiarSemana(1)">Semana ▶</button>
+    </div>
+  </div>
+  <div class="card" id="listaCompra">Calculando lista...</div>
 </section>
 
 <section id="seguimiento">
@@ -99,6 +114,14 @@ button.primary { background:#0072ff; color:white; border:none; }
       <div class="stat" id="mediaAnual">Anual: -</div>
     </div>
   </div>
+
+  <div class="card">
+    <h3>Registros</h3>
+    <table>
+      <thead><tr><th>Fecha</th><th>Peso</th><th></th></tr></thead>
+      <tbody id="tablaPesos"></tbody>
+    </table>
+  </div>
 </section>
 
 <script>
@@ -106,6 +129,7 @@ let eventsByDate = {};
 let current = new Date();
 let chart;
 let alimentosData = {};
+let weekOffset = 0;
 
 function showTab(id,btn){
   document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
@@ -129,7 +153,7 @@ async function loadICS(){
       if(!eventsByDate[date]) eventsByDate[date]=[];
       eventsByDate[date].push(time+" - "+summary);
     });
-    renderToday(); renderCalendar();
+    renderToday(); renderCalendar(); renderCompra();
   }catch(e){}
 }
 
@@ -166,7 +190,7 @@ function showDay(date){
 function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
 function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
 
-// -------- ALIMENTOS CON CHECKLIST --------
+// -------- ALIMENTOS --------
 async function loadFoods(){
   try{
     const local = localStorage.getItem("alimentosData");
@@ -227,7 +251,50 @@ function removeFood(cat,index){
   renderFoods();
 }
 
-// -------- PESO + GRAFICAS --------
+// -------- LISTA COMPRA --------
+function cambiarSemana(dir){ weekOffset += dir; renderCompra(); }
+
+function inicioSemana(date){
+  const d = new Date(date);
+  const day = (d.getDay()+6)%7;
+  d.setDate(d.getDate()-day);
+  return d;
+}
+
+function renderCompra(){
+  const base = inicioSemana(new Date());
+  base.setDate(base.getDate() + weekOffset*7);
+  const end = new Date(base); end.setDate(base.getDate()+6);
+
+  document.getElementById("weekLabel").innerText =
+    base.toLocaleDateString("es-ES") + " - " + end.toLocaleDateString("es-ES");
+
+  const counts = {};
+  for(let i=0;i<7;i++){
+    const d = new Date(base); d.setDate(base.getDate()+i);
+    const key = d.toISOString().slice(0,10);
+    (eventsByDate[key]||[]).forEach(ev=>{
+      if(ev.includes("Desayuno")||ev.includes("Comida")||ev.includes("Cena")||ev.includes("Merienda")||ev.includes("Media")){
+        const foods = ev.split(":")[1]||"";
+        foods.split(/[,+y]/i).forEach(f=>{
+          const item = f.trim().toLowerCase();
+          if(!item) return;
+          counts[item] = (counts[item]||0)+1;
+        });
+      }
+    });
+  }
+
+  const cont = document.getElementById("listaCompra");
+  if(Object.keys(counts).length===0){ cont.innerHTML="Sin datos para esta semana"; return; }
+
+  cont.innerHTML = "<h3>Lista semanal</h3>";
+  Object.keys(counts).sort().forEach(item=>{
+    cont.innerHTML += `<li><span>${item}</span><strong>x${counts[item]}</strong></li>`;
+  });
+}
+
+// -------- PESO --------
 function guardarPeso(){
   const v = parseFloat(document.getElementById("pesoInput").value);
   if(!v) return alert("Introduce peso válido");
@@ -239,10 +306,24 @@ function guardarPeso(){
   renderPesos();
 }
 
+function borrarPeso(fecha){
+  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+  delete data[fecha];
+  localStorage.setItem("pesos",JSON.stringify(data));
+  renderPesos();
+}
+
 function renderPesos(){
   const data = JSON.parse(localStorage.getItem("pesos")||"{}");
   const fechas = Object.keys(data).sort();
   const pesos = fechas.map(f=>data[f]);
+
+  const tbody=document.getElementById("tablaPesos");
+  tbody.innerHTML="";
+  fechas.forEach(f=>{
+    tbody.innerHTML += `<tr><td>${f}</td><td>${data[f]} kg</td><td><button onclick="borrarPeso('${f}')">❌</button></td></tr>`;
+  });
+
   if(chart) chart.destroy();
   chart=new Chart(document.getElementById("pesoChart"),{
     type:"line",
