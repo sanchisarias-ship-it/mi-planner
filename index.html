@@ -137,7 +137,7 @@ function showTab(id,btn){
   if(id==="compra") renderCompra();
 }
 
-// --------- ICS ----------
+// ---------- ICS ----------
 async function loadICS(){
   try{
     const res = await fetch("plan_anual_completo_365_dias.ics");
@@ -189,7 +189,7 @@ function showDay(date){
 function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
 function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
 
-// -------- ALIMENTOS --------
+// ---------- ALIMENTOS ----------
 async function loadFoods(){
   try{
     const local = localStorage.getItem("alimentosData");
@@ -219,7 +219,7 @@ function renderFoods(){
       const key = cat+"_"+item;
       const marcado = checks[key];
       cont.innerHTML += `<li class="${marcado?'checked':''}">
-        <input type="checkbox" ${marcado?'checked':''} onchange="toggleCheck('${key}')">
+               <input type="checkbox" ${marcado?'checked':''} onchange="toggleCheck('${key}')">
         <span>${item}</span>
         <button onclick="removeFood('${cat}',${i})">🗑️</button>
       </li>`;
@@ -252,7 +252,7 @@ function removeFood(cat,index){
   renderCompra();
 }
 
-// -------- LISTA COMPRA --------
+// ---------- COMPRA ----------
 function renderCompra(){
   const cont = document.getElementById("listaCompra");
   const checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
@@ -292,7 +292,7 @@ function vaciarLista(){
   }
 }
 
-// -------- PESO --------
+// ---------- PESO ----------
 function guardarPeso(){
   const v = parseFloat(document.getElementById("pesoInput").value);
   if(!v) return alert("Introduce peso válido");
@@ -347,7 +347,22 @@ function calcularMedias(fechas,pesos){
   document.getElementById("mediaAnual").innerText="Anual: "+avg(anual)+" kg";
 }
 
-loadICS(); loadFoods(); renderPesos();
+// ---------- FUNCIÓN PARA ATAJOS ----------
+window.getWidgetText = function() {
+  const today = new Date().toISOString().slice(0,10);
+  const eventos = (eventsByDate[today] || []);
+  const textoEventos = eventos.length ? eventos.join("\n") : "Sin eventos hoy";
+
+  const pesos = JSON.parse(localStorage.getItem("pesos")||"{}");
+  const fechas = Object.keys(pesos).sort();
+  const ultimoPeso = fechas.length ? pesos[fechas[fechas.length-1]] + " kg" : "No registrado";
+
+  return `📅 Hoy – Mi Planner\n\n${textoEventos}\n\n⚖️ Peso: ${ultimoPeso}`;
+};
+
+loadICS(); 
+loadFoods(); 
+renderPesos();
 </script>
 </body>
 </html>
