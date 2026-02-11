@@ -1,0 +1,386 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/index.html b/index.html
+index c7ae5573c86ee475130fa4bd9ad1d5635daae97c..56a0a840a22af24fcf7a4a5a462827c1dbd06a50 100644
+--- a/index.html
++++ b/index.html
+@@ -1,79 +1,108 @@
+ <!DOCTYPE html>
+ <html lang="es">
+ <head>
+ <meta charset="UTF-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ <title>Mi Planner Saludable</title>
+ <link rel="apple-touch-icon" href="apple-touch-icon.png">
+ <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+ <style>
+ body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f4f9ff; }
+ header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:12px; text-align:center; display:flex; align-items:center; justify-content:center; gap:12px;}
+ header img { width:48px; height:48px; border-radius:12px; }
+-nav { display:flex; background:#0d2b45; }
+-nav button { flex:1; padding:12px; border:none; background:#0d2b45; color:white; font-size:14px; }
+-nav button.active { background:#123e63; }
++nav { display:flex; background:#0d2b45; overflow-x:auto; position:sticky; top:0; z-index:30; box-shadow:0 2px 6px rgba(0,0,0,.12); }
++nav button { flex:1; min-width:110px; padding:12px; border:none; background:#0d2b45; color:white; font-size:14px; white-space:nowrap; cursor:pointer; border-bottom:2px solid transparent; }
++nav button.active { background:#123e63; border-bottom-color:#7ec8ff; font-weight:600; }
+ section { display:none; padding:14px; }
+ section.active { display:block; }
+ .card { background:white; padding:14px; border-radius:16px; margin-bottom:12px; box-shadow:0 4px 8px rgba(0,0,0,.06); }
+ 
+ .grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+ .day { background:#e9f1f9; padding:10px; border-radius:12px; text-align:center; font-size:13px; cursor:pointer; }
+ .today { border:2px solid #0072ff; }
+ .event { background:#eef7ff; padding:6px 10px; border-radius:10px; margin:6px 0; font-size:14px; }
+ 
+ .weekdays { display:grid; grid-template-columns:repeat(7,1fr); font-size:12px; font-weight:bold; text-align:center; margin-bottom:6px; }
+ 
+ li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9fcff; padding:6px 10px; border-radius:10px; margin-bottom:6px; }
+ li span { flex:1; }
+ li.checked { text-decoration: line-through; background:#dffbe7; opacity:0.85; }
+ 
+ input, button, select { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:15px; }
+ button.primary { background:#0072ff; color:white; border:none; }
+ button.danger { background:#ff4d4d; color:white; border:none; }
+ .small { font-size:13px; color:#666; }
+ 
+ .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; text-align:center; }
+ .stat { background:#eef7ff; padding:10px; border-radius:12px; font-weight:bold; }
+ 
+ table { width:100%; border-collapse:collapse; }
+ td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:left; }
++
++.form-grid { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
++.ticket-preview { width:100%; max-height:150px; object-fit:cover; border-radius:10px; border:1px solid #d5e8ff; }
++
++@media (max-width: 768px) {
++  header { flex-direction:column; padding:10px; gap:6px; }
++  header h2 { font-size:20px; margin:0; }
++  section { padding:10px; }
++  .card { padding:12px; border-radius:12px; }
++  .grid { gap:4px; }
++  .day { padding:8px 6px; font-size:12px; }
++  nav {
++    display:grid;
++    grid-template-columns:repeat(3, 1fr);
++    overflow-x:visible;
++  }
++  nav button {
++    min-width:0;
++    font-size:12px;
++    padding:10px 6px;
++    border-bottom:1px solid rgba(255,255,255,.15);
++    border-right:1px solid rgba(255,255,255,.08);
++  }
++  nav button:nth-child(3n) { border-right:none; }
++  .stats-grid { grid-template-columns:1fr; }
++  .form-grid { grid-template-columns:1fr; }
++  input, button, select { width:100%; box-sizing:border-box; }
++}
+ </style>
+ </head>
+ <body>
+ 
+ <header>
+   <img src="apple-touch-icon.png" alt="Icono">
+   <h2>Mi Planner Saludable</h2>
+ </header>
+ 
+ <nav>
+   <button class="active" onclick="showTab('hoy',this)">Hoy</button>
+   <button onclick="showTab('calendario',this)">Calendario</button>
+   <button onclick="showTab('alimentos',this)">Alimentos</button>
+   <button onclick="showTab('compra',this)">Lista compra</button>
++  <button onclick="showTab('gastos',this)">Gastos</button>
+   <button onclick="showTab('seguimiento',this)">Seguimiento</button>
+ </nav>
+ 
+ <section id="hoy" class="active">
+   <div class="card"><h3>Hoy</h3><div id="todayEvents">Cargando...</div></div>
+ </section>
+ 
+ <section id="calendario">
+   <div class="card">
+     <div style="display:flex;justify-content:space-between;align-items:center;">
+       <button onclick="prevMonth()">◀</button>
+       <strong id="monthLabel"></strong>
+       <button onclick="nextMonth()">▶</button>
+     </div>
+     <div class="weekdays"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div>
+     <div id="calendar" class="grid"></div>
+   </div>
+   <div class="card"><h3 id="selectedDate">Selecciona un día</h3><div id="dayEvents"></div></div>
+ </section>
+ 
+ <section id="alimentos">
+   <div class="card">
+     <h3>➕ Añadir alimento</h3>
+     <div style="display:flex; gap:6px; flex-wrap:wrap;">
+       <input id="nuevoAlimento" placeholder="Ej: Aguacate">
+@@ -101,62 +130,97 @@ td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:l
+       <input type="number" step="0.1" id="pesoInput" placeholder="Peso (kg)">
+       <button class="primary" onclick="guardarPeso()">Guardar</button>
+     </div>
+   </div>
+ 
+   <div class="card"><canvas id="pesoChart" height="120"></canvas></div>
+ 
+   <div class="card">
+     <h3>Medias</h3>
+     <div class="stats-grid">
+       <div class="stat" id="mediaSemanal">Semanal: -</div>
+       <div class="stat" id="mediaMensual">Mensual: -</div>
+       <div class="stat" id="mediaAnual">Anual: -</div>
+     </div>
+   </div>
+ 
+   <div class="card">
+     <h3>Registros</h3>
+     <table>
+       <thead><tr><th>Fecha</th><th>Peso</th><th></th></tr></thead>
+       <tbody id="tablaPesos"></tbody>
+     </table>
+   </div>
+ </section>
+ 
++<section id="gastos">
++  <div class="card">
++    <h3>🧾 Nuevo ticket de compra</h3>
++    <div class="form-grid">
++      <input id="ticketStore" placeholder="Supermercado (Ej: Mercadona)">
++      <input type="number" step="0.01" id="ticketAmount" placeholder="Total €">
++      <input type="date" id="ticketDate">
++      <input type="file" id="ticketPhoto" accept="image/*" capture="environment">
++    </div>
++    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
++      <button class="primary" onclick="guardarGasto()">Guardar gasto</button>
++      <button class="danger" onclick="limpiarGastos()">Borrar todos</button>
++    </div>
++    <p class="small">Puedes adjuntar una foto del ticket para tener histórico visual de cada compra.</p>
++  </div>
++
++  <div class="card">
++    <h3>Resumen de gasto</h3>
++    <div class="stats-grid">
++      <div class="stat" id="gastoSemanal">Semanal: 0.00 €</div>
++      <div class="stat" id="gastoMensual">Mensual: 0.00 €</div>
++      <div class="stat" id="gastoAnual">Anual: 0.00 €</div>
++    </div>
++  </div>
++
++  <div class="card"><canvas id="gastoChart" height="120"></canvas></div>
++
++  <div class="card">
++    <h3>Histórico de tickets</h3>
++    <div id="ticketList">Sin gastos registrados.</div>
++  </div>
++</section>
++
+ <script>
+ let eventsByDate = {};
+ let current = new Date();
+ let chart;
++let gastoChart;
+ let alimentosData = {};
+ 
+ function showTab(id,btn){
+   document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+   document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+   document.getElementById(id).classList.add("active");
+   btn.classList.add("active");
+   if(id==="compra") renderCompra();
++  if(id==="gastos") renderGastos();
+ }
+ 
+ // ---------- ICS ----------
+ async function loadICS(){
+   try{
+     const res = await fetch("plan_anual_completo_365_dias.ics");
+     const text = await res.text();
+     const blocks = text.split("BEGIN:VEVENT");
+     blocks.forEach(b=>{
+       const summary = (b.match(/SUMMARY:(.+)/)||[])[1];
+       const dt = (b.match(/DTSTART:(\d{8})T(\d{6})/)||[]);
+       if(!summary||!dt[1]) return;
+       const date = dt[1].slice(0,4)+"-"+dt[1].slice(4,6)+"-"+dt[1].slice(6,8);
+       const time = dt[2].slice(0,2)+":"+dt[2].slice(2,4);
+       if(!eventsByDate[date]) eventsByDate[date]=[];
+       eventsByDate[date].push(time+" - "+summary);
+     });
+     renderToday(); renderCalendar();
+   }catch(e){}
+ }
+ 
+ function renderToday(){
+   const today = new Date().toISOString().slice(0,10);
+   const cont = document.getElementById("todayEvents");
+   cont.innerHTML="";
+@@ -325,44 +389,167 @@ function renderPesos(){
+   if(chart) chart.destroy();
+   chart=new Chart(document.getElementById("pesoChart"),{
+     type:"line",
+     data:{labels:fechas,datasets:[{data:pesos,fill:true,tension:0.3}]},
+     options:{plugins:{legend:{display:false}}}
+   });
+   calcularMedias(fechas,pesos);
+ }
+ 
+ function calcularMedias(fechas,pesos){
+   function avg(arr){return arr.length?(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1):"-";}
+   const now=new Date();
+   const semanal=[], mensual=[], anual=[];
+   fechas.forEach((f,i)=>{
+     const d=new Date(f);
+     const diff=(now-d)/(1000*3600*24);
+     if(diff<=7) semanal.push(pesos[i]);
+     if(diff<=30) mensual.push(pesos[i]);
+     if(diff<=365) anual.push(pesos[i]);
+   });
+   document.getElementById("mediaSemanal").innerText="Semanal: "+avg(semanal)+" kg";
+   document.getElementById("mediaMensual").innerText="Mensual: "+avg(mensual)+" kg";
+   document.getElementById("mediaAnual").innerText="Anual: "+avg(anual)+" kg";
+ }
+ 
++// ---------- GASTOS ----------
++function getStartOfWeek(date){
++  const d = new Date(date);
++  const day = (d.getDay() + 6) % 7;
++  d.setDate(d.getDate() - day);
++  d.setHours(0,0,0,0);
++  return d;
++}
++
++function guardarGasto(){
++  const store = document.getElementById("ticketStore").value.trim() || "Supermercado";
++  const amount = parseFloat(document.getElementById("ticketAmount").value);
++  const date = document.getElementById("ticketDate").value || new Date().toISOString().slice(0,10);
++  const photoInput = document.getElementById("ticketPhoto");
++
++  if(!amount || amount <= 0) return alert("Introduce un importe válido");
++
++  const saveExpense = (photoData="") => {
++    let gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++    gastos.unshift({
++      id: Date.now(),
++      store,
++      amount: Number(amount.toFixed(2)),
++      date,
++      photo: photoData
++    });
++    localStorage.setItem("gastosCompra", JSON.stringify(gastos));
++
++    document.getElementById("ticketStore").value = "";
++    document.getElementById("ticketAmount").value = "";
++    document.getElementById("ticketDate").value = "";
++    photoInput.value = "";
++    renderGastos();
++  };
++
++  const file = photoInput.files[0];
++  if(file){
++    const reader = new FileReader();
++    reader.onload = () => saveExpense(reader.result);
++    reader.readAsDataURL(file);
++  } else {
++    saveExpense();
++  }
++}
++
++function borrarGasto(id){
++  let gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++  gastos = gastos.filter(g => g.id !== id);
++  localStorage.setItem("gastosCompra", JSON.stringify(gastos));
++  renderGastos();
++}
++
++function limpiarGastos(){
++  if(confirm("¿Borrar todos los gastos de supermercado?")){
++    localStorage.removeItem("gastosCompra");
++    renderGastos();
++  }
++}
++
++function renderGastos(){
++  const gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++  const list = document.getElementById("ticketList");
++  const now = new Date();
++
++  let semanal = 0, mensual = 0, anual = 0;
++  const chartData = {};
++
++  gastos.forEach(g => {
++    const d = new Date(g.date + "T00:00:00");
++    const diffDays = (now - d) / (1000 * 3600 * 24);
++    if(diffDays <= 7) semanal += g.amount;
++    if(diffDays <= 30) mensual += g.amount;
++    if(diffDays <= 365) anual += g.amount;
++
++    const week = getStartOfWeek(d).toISOString().slice(0,10);
++    chartData[week] = (chartData[week] || 0) + g.amount;
++  });
++
++  document.getElementById("gastoSemanal").innerText = `Semanal: ${semanal.toFixed(2)} €`;
++  document.getElementById("gastoMensual").innerText = `Mensual: ${mensual.toFixed(2)} €`;
++  document.getElementById("gastoAnual").innerText = `Anual: ${anual.toFixed(2)} €`;
++
++  if(gastos.length === 0){
++    list.innerHTML = "Sin gastos registrados.";
++  } else {
++    list.innerHTML = gastos.map(g => `
++      <div class="event" style="margin-bottom:10px;">
++        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
++          <div>
++            <strong>${g.store}</strong> · ${g.date}<br>
++            <span>${g.amount.toFixed(2)} €</span>
++          </div>
++          <button onclick="borrarGasto(${g.id})">🗑️</button>
++        </div>
++        ${g.photo ? `<img src="${g.photo}" alt="Ticket ${g.store}" class="ticket-preview">` : ""}
++      </div>
++    `).join("");
++  }
++
++  const labels = Object.keys(chartData).sort();
++  const values = labels.map(l => Number(chartData[l].toFixed(2)));
++
++  if(gastoChart) gastoChart.destroy();
++  gastoChart = new Chart(document.getElementById("gastoChart"), {
++    type: "bar",
++    data: {
++      labels,
++      datasets: [{
++        label: "Gasto semanal (€)",
++        data: values,
++        backgroundColor: "rgba(0, 114, 255, 0.5)",
++        borderColor: "#0072ff",
++        borderWidth: 1
++      }]
++    },
++    options: {
++      plugins: { legend: { display: false } },
++      scales: { y: { beginAtZero: true } }
++    }
++  });
++}
++
+ // ---------- FUNCIÓN PARA ATAJOS ----------
+ window.getWidgetText = function() {
+   const today = new Date().toISOString().slice(0,10);
+   const eventos = (eventsByDate[today] || []);
+   const textoEventos = eventos.length ? eventos.join("\n") : "Sin eventos hoy";
+ 
+   const pesos = JSON.parse(localStorage.getItem("pesos")||"{}");
+   const fechas = Object.keys(pesos).sort();
+   const ultimoPeso = fechas.length ? pesos[fechas[fechas.length-1]] + " kg" : "No registrado";
+ 
+   return `📅 Hoy – Mi Planner\n\n${textoEventos}\n\n⚖️ Peso: ${ultimoPeso}`;
+ };
+ 
+ loadICS(); 
+ loadFoods(); 
+ renderPesos();
++renderGastos();
+ </script>
+ </body>
+ </html>
+ 
+EOF
+)
