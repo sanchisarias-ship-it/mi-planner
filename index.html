@@ -1,0 +1,1106 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/index.html b/index.html
+index c7ae5573c86ee475130fa4bd9ad1d5635daae97c..d4f229feb2af06d228cfabf96a463c33b9c93744 100644
+--- a/index.html
++++ b/index.html
+@@ -1,79 +1,102 @@
+ <!DOCTYPE html>
+ <html lang="es">
+ <head>
+ <meta charset="UTF-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ <title>Mi Planner Saludable</title>
+ <link rel="apple-touch-icon" href="apple-touch-icon.png">
+ <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+ <style>
+ body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f4f9ff; }
+ header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:12px; text-align:center; display:flex; align-items:center; justify-content:center; gap:12px;}
+ header img { width:48px; height:48px; border-radius:12px; }
+-nav { display:flex; background:#0d2b45; }
+-nav button { flex:1; padding:12px; border:none; background:#0d2b45; color:white; font-size:14px; }
++nav { display:flex; background:#0d2b45; overflow-x:auto; }
++nav button { flex:1; min-width:96px; padding:12px; border:none; background:#0d2b45; color:white; font-size:14px; white-space:nowrap; cursor:pointer; }
+ nav button.active { background:#123e63; }
+ section { display:none; padding:14px; }
+ section.active { display:block; }
+ .card { background:white; padding:14px; border-radius:16px; margin-bottom:12px; box-shadow:0 4px 8px rgba(0,0,0,.06); }
+ 
+ .grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+ .day { background:#e9f1f9; padding:10px; border-radius:12px; text-align:center; font-size:13px; cursor:pointer; }
+ .today { border:2px solid #0072ff; }
+ .event { background:#eef7ff; padding:6px 10px; border-radius:10px; margin:6px 0; font-size:14px; }
+ 
+ .weekdays { display:grid; grid-template-columns:repeat(7,1fr); font-size:12px; font-weight:bold; text-align:center; margin-bottom:6px; }
+ 
+ li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9fcff; padding:6px 10px; border-radius:10px; margin-bottom:6px; }
+ li span { flex:1; }
+ li.checked { text-decoration: line-through; background:#dffbe7; opacity:0.85; }
+ 
+ input, button, select { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:15px; }
+ button.primary { background:#0072ff; color:white; border:none; }
+ button.danger { background:#ff4d4d; color:white; border:none; }
+ .small { font-size:13px; color:#666; }
+ 
+ .stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; text-align:center; }
+ .stat { background:#eef7ff; padding:10px; border-radius:12px; font-weight:bold; }
+ 
+ table { width:100%; border-collapse:collapse; }
+ td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:left; }
++
++.form-grid { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
++.ticket-preview { width:100%; max-height:150px; object-fit:cover; border-radius:10px; border:1px solid #d5e8ff; }
++
++@media (max-width: 768px) {
++  header { flex-direction:column; padding:10px; gap:6px; }
++  header h2 { font-size:20px; margin:0; }
++  section { padding:10px; }
++  .card { padding:12px; border-radius:12px; }
++  .grid { gap:4px; }
++  .day { padding:8px 6px; font-size:12px; }
++  nav { overflow-x:auto; }
++  nav button {
++    flex:0 0 auto;
++    min-width:96px;
++    font-size:13px;
++    padding:10px 8px;
++  }
++  .stats-grid { grid-template-columns:1fr; }
++  .form-grid { grid-template-columns:1fr; }
++  input, button, select { width:100%; box-sizing:border-box; }
++}
+ </style>
+ </head>
+ <body>
+ 
+ <header>
+   <img src="apple-touch-icon.png" alt="Icono">
+   <h2>Mi Planner Saludable</h2>
+ </header>
+ 
+ <nav>
+   <button class="active" onclick="showTab('hoy',this)">Hoy</button>
+   <button onclick="showTab('calendario',this)">Calendario</button>
+   <button onclick="showTab('alimentos',this)">Alimentos</button>
+   <button onclick="showTab('compra',this)">Lista compra</button>
++  <button onclick="showTab('gastos',this)">Gastos</button>
+   <button onclick="showTab('seguimiento',this)">Seguimiento</button>
+ </nav>
+ 
+ <section id="hoy" class="active">
+   <div class="card"><h3>Hoy</h3><div id="todayEvents">Cargando...</div></div>
+ </section>
+ 
+ <section id="calendario">
+   <div class="card">
+     <div style="display:flex;justify-content:space-between;align-items:center;">
+       <button onclick="prevMonth()">◀</button>
+       <strong id="monthLabel"></strong>
+       <button onclick="nextMonth()">▶</button>
+     </div>
+     <div class="weekdays"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div>
+     <div id="calendar" class="grid"></div>
+   </div>
+   <div class="card"><h3 id="selectedDate">Selecciona un día</h3><div id="dayEvents"></div></div>
+ </section>
+ 
+ <section id="alimentos">
+   <div class="card">
+     <h3>➕ Añadir alimento</h3>
+     <div style="display:flex; gap:6px; flex-wrap:wrap;">
+       <input id="nuevoAlimento" placeholder="Ej: Aguacate">
+@@ -101,62 +124,97 @@ td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:l
+       <input type="number" step="0.1" id="pesoInput" placeholder="Peso (kg)">
+       <button class="primary" onclick="guardarPeso()">Guardar</button>
+     </div>
+   </div>
+ 
+   <div class="card"><canvas id="pesoChart" height="120"></canvas></div>
+ 
+   <div class="card">
+     <h3>Medias</h3>
+     <div class="stats-grid">
+       <div class="stat" id="mediaSemanal">Semanal: -</div>
+       <div class="stat" id="mediaMensual">Mensual: -</div>
+       <div class="stat" id="mediaAnual">Anual: -</div>
+     </div>
+   </div>
+ 
+   <div class="card">
+     <h3>Registros</h3>
+     <table>
+       <thead><tr><th>Fecha</th><th>Peso</th><th></th></tr></thead>
+       <tbody id="tablaPesos"></tbody>
+     </table>
+   </div>
+ </section>
+ 
++<section id="gastos">
++  <div class="card">
++    <h3>🧾 Nuevo ticket de compra</h3>
++    <div class="form-grid">
++      <input id="ticketStore" placeholder="Supermercado (Ej: Mercadona)">
++      <input type="number" step="0.01" id="ticketAmount" placeholder="Total €">
++      <input type="date" id="ticketDate">
++      <input type="file" id="ticketPhoto" accept="image/*" capture="environment">
++    </div>
++    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
++      <button class="primary" onclick="guardarGasto()">Guardar gasto</button>
++      <button class="danger" onclick="limpiarGastos()">Borrar todos</button>
++    </div>
++    <p class="small">Puedes adjuntar una foto del ticket para tener histórico visual de cada compra.</p>
++  </div>
++
++  <div class="card">
++    <h3>Resumen de gasto</h3>
++    <div class="stats-grid">
++      <div class="stat" id="gastoSemanal">Semanal: 0.00 €</div>
++      <div class="stat" id="gastoMensual">Mensual: 0.00 €</div>
++      <div class="stat" id="gastoAnual">Anual: 0.00 €</div>
++    </div>
++  </div>
++
++  <div class="card"><canvas id="gastoChart" height="120"></canvas></div>
++
++  <div class="card">
++    <h3>Histórico de tickets</h3>
++    <div id="ticketList">Sin gastos registrados.</div>
++  </div>
++</section>
++
+ <script>
+ let eventsByDate = {};
+ let current = new Date();
+ let chart;
++let gastoChart;
+ let alimentosData = {};
+ 
+ function showTab(id,btn){
+   document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+   document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+   document.getElementById(id).classList.add("active");
+-  btn.classList.add("active");
++  if(btn) btn.classList.add("active");
+   if(id==="compra") renderCompra();
++  if(id==="gastos") renderGastos();
+ }
+ 
+ // ---------- ICS ----------
+ async function loadICS(){
+   try{
+     const res = await fetch("plan_anual_completo_365_dias.ics");
+     const text = await res.text();
+     const blocks = text.split("BEGIN:VEVENT");
+     blocks.forEach(b=>{
+       const summary = (b.match(/SUMMARY:(.+)/)||[])[1];
+       const dt = (b.match(/DTSTART:(\d{8})T(\d{6})/)||[]);
+       if(!summary||!dt[1]) return;
+       const date = dt[1].slice(0,4)+"-"+dt[1].slice(4,6)+"-"+dt[1].slice(6,8);
+       const time = dt[2].slice(0,2)+":"+dt[2].slice(2,4);
+       if(!eventsByDate[date]) eventsByDate[date]=[];
+       eventsByDate[date].push(time+" - "+summary);
+     });
+     renderToday(); renderCalendar();
+   }catch(e){}
+ }
+ 
+ function renderToday(){
+   const today = new Date().toISOString().slice(0,10);
+   const cont = document.getElementById("todayEvents");
+   cont.innerHTML="";
+@@ -300,69 +358,196 @@ function guardarPeso(){
+   let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+   data[hoy]=v;
+   localStorage.setItem("pesos",JSON.stringify(data));
+   document.getElementById("pesoInput").value="";
+   renderPesos();
+ }
+ 
+ function borrarPeso(fecha){
+   let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+   delete data[fecha];
+   localStorage.setItem("pesos",JSON.stringify(data));
+   renderPesos();
+ }
+ 
+ function renderPesos(){
+   const data = JSON.parse(localStorage.getItem("pesos")||"{}");
+   const fechas = Object.keys(data).sort();
+   const pesos = fechas.map(f=>data[f]);
+ 
+   const tbody=document.getElementById("tablaPesos");
+   tbody.innerHTML="";
+   fechas.forEach(f=>{
+     tbody.innerHTML += `<tr><td>${f}</td><td>${data[f]} kg</td><td><button onclick="borrarPeso('${f}')">❌</button></td></tr>`;
+   });
+ 
+-  if(chart) chart.destroy();
+-  chart=new Chart(document.getElementById("pesoChart"),{
+-    type:"line",
+-    data:{labels:fechas,datasets:[{data:pesos,fill:true,tension:0.3}]},
+-    options:{plugins:{legend:{display:false}}}
+-  });
++  if(typeof Chart !== "undefined"){
++    if(chart) chart.destroy();
++    chart=new Chart(document.getElementById("pesoChart"),{
++      type:"line",
++      data:{labels:fechas,datasets:[{data:pesos,fill:true,tension:0.3}]},
++      options:{plugins:{legend:{display:false}}}
++    });
++  }
+   calcularMedias(fechas,pesos);
+ }
+ 
+ function calcularMedias(fechas,pesos){
+   function avg(arr){return arr.length?(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1):"-";}
+   const now=new Date();
+   const semanal=[], mensual=[], anual=[];
+   fechas.forEach((f,i)=>{
+     const d=new Date(f);
+     const diff=(now-d)/(1000*3600*24);
+     if(diff<=7) semanal.push(pesos[i]);
+     if(diff<=30) mensual.push(pesos[i]);
+     if(diff<=365) anual.push(pesos[i]);
+   });
+   document.getElementById("mediaSemanal").innerText="Semanal: "+avg(semanal)+" kg";
+   document.getElementById("mediaMensual").innerText="Mensual: "+avg(mensual)+" kg";
+   document.getElementById("mediaAnual").innerText="Anual: "+avg(anual)+" kg";
+ }
+ 
++// ---------- GASTOS ----------
++function getStartOfWeek(date){
++  const d = new Date(date);
++  const day = (d.getDay() + 6) % 7;
++  d.setDate(d.getDate() - day);
++  d.setHours(0,0,0,0);
++  return d;
++}
++
++function guardarGasto(){
++  const store = document.getElementById("ticketStore").value.trim() || "Supermercado";
++  const amount = parseFloat(document.getElementById("ticketAmount").value);
++  const date = document.getElementById("ticketDate").value || new Date().toISOString().slice(0,10);
++  const photoInput = document.getElementById("ticketPhoto");
++
++  if(!amount || amount <= 0) return alert("Introduce un importe válido");
++
++  const saveExpense = (photoData="") => {
++    let gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++    gastos.unshift({
++      id: Date.now(),
++      store,
++      amount: Number(amount.toFixed(2)),
++      date,
++      photo: photoData
++    });
++    localStorage.setItem("gastosCompra", JSON.stringify(gastos));
++
++    document.getElementById("ticketStore").value = "";
++    document.getElementById("ticketAmount").value = "";
++    document.getElementById("ticketDate").value = "";
++    photoInput.value = "";
++    renderGastos();
++  };
++
++  const file = photoInput.files[0];
++  if(file){
++    const reader = new FileReader();
++    reader.onload = () => saveExpense(reader.result);
++    reader.readAsDataURL(file);
++  } else {
++    saveExpense();
++  }
++}
++
++function borrarGasto(id){
++  let gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++  gastos = gastos.filter(g => g.id !== id);
++  localStorage.setItem("gastosCompra", JSON.stringify(gastos));
++  renderGastos();
++}
++
++function limpiarGastos(){
++  if(confirm("¿Borrar todos los gastos de supermercado?")){
++    localStorage.removeItem("gastosCompra");
++    renderGastos();
++  }
++}
++
++function renderGastos(){
++  const gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++  const list = document.getElementById("ticketList");
++  const now = new Date();
++
++  let semanal = 0, mensual = 0, anual = 0;
++  const chartData = {};
++
++  gastos.forEach(g => {
++    const d = new Date(g.date + "T00:00:00");
++    const diffDays = (now - d) / (1000 * 3600 * 24);
++    if(diffDays <= 7) semanal += g.amount;
++    if(diffDays <= 30) mensual += g.amount;
++    if(diffDays <= 365) anual += g.amount;
++
++    const week = getStartOfWeek(d).toISOString().slice(0,10);
++    chartData[week] = (chartData[week] || 0) + g.amount;
++  });
++
++  document.getElementById("gastoSemanal").innerText = `Semanal: ${semanal.toFixed(2)} €`;
++  document.getElementById("gastoMensual").innerText = `Mensual: ${mensual.toFixed(2)} €`;
++  document.getElementById("gastoAnual").innerText = `Anual: ${anual.toFixed(2)} €`;
++
++  if(gastos.length === 0){
++    list.innerHTML = "Sin gastos registrados.";
++  } else {
++    list.innerHTML = gastos.map(g => `
++      <div class="event" style="margin-bottom:10px;">
++        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
++          <div>
++            <strong>${g.store}</strong> · ${g.date}<br>
++            <span>${g.amount.toFixed(2)} €</span>
++          </div>
++          <button onclick="borrarGasto(${g.id})">🗑️</button>
++        </div>
++        ${g.photo ? `<img src="${g.photo}" alt="Ticket ${g.store}" class="ticket-preview">` : ""}
++      </div>
++    `).join("");
++  }
++
++  const labels = Object.keys(chartData).sort();
++  const values = labels.map(l => Number(chartData[l].toFixed(2)));
++
++  if(typeof Chart !== "undefined"){
++    if(gastoChart) gastoChart.destroy();
++    gastoChart = new Chart(document.getElementById("gastoChart"), {
++      type: "bar",
++      data: {
++        labels,
++        datasets: [{
++          label: "Gasto semanal (€)",
++          data: values,
++          backgroundColor: "rgba(0, 114, 255, 0.5)",
++          borderColor: "#0072ff",
++          borderWidth: 1
++        }]
++      },
++      options: {
++        plugins: { legend: { display: false } },
++        scales: { y: { beginAtZero: true } }
++      }
++    });
++  }
++}
++
+ // ---------- FUNCIÓN PARA ATAJOS ----------
+ window.getWidgetText = function() {
+   const today = new Date().toISOString().slice(0,10);
+   const eventos = (eventsByDate[today] || []);
+   const textoEventos = eventos.length ? eventos.join("\n") : "Sin eventos hoy";
+ 
+   const pesos = JSON.parse(localStorage.getItem("pesos")||"{}");
+   const fechas = Object.keys(pesos).sort();
+   const ultimoPeso = fechas.length ? pesos[fechas[fechas.length-1]] + " kg" : "No registrado";
+ 
+   return `📅 Hoy – Mi Planner\n\n${textoEventos}\n\n⚖️ Peso: ${ultimoPeso}`;
+ };
+ 
+ loadICS(); 
+ loadFoods(); 
+ renderPesos();
++renderGastos();
+ </script>
+ </body>
+ </html>
+diff --git a/index_actualizado.html b/index_actualizado.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..56a0a840a22af24fcf7a4a5a462827c1dbd06a50
+--- /dev/null
++++ b/index_actualizado.html
+@@ -0,0 +1,555 @@
++<!DOCTYPE html>
++<html lang="es">
++<head>
++<meta charset="UTF-8" />
++<meta name="viewport" content="width=device-width, initial-scale=1.0" />
++<title>Mi Planner Saludable</title>
++<link rel="apple-touch-icon" href="apple-touch-icon.png">
++<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
++<style>
++body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f4f9ff; }
++header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:12px; text-align:center; display:flex; align-items:center; justify-content:center; gap:12px;}
++header img { width:48px; height:48px; border-radius:12px; }
++nav { display:flex; background:#0d2b45; overflow-x:auto; position:sticky; top:0; z-index:30; box-shadow:0 2px 6px rgba(0,0,0,.12); }
++nav button { flex:1; min-width:110px; padding:12px; border:none; background:#0d2b45; color:white; font-size:14px; white-space:nowrap; cursor:pointer; border-bottom:2px solid transparent; }
++nav button.active { background:#123e63; border-bottom-color:#7ec8ff; font-weight:600; }
++section { display:none; padding:14px; }
++section.active { display:block; }
++.card { background:white; padding:14px; border-radius:16px; margin-bottom:12px; box-shadow:0 4px 8px rgba(0,0,0,.06); }
++
++.grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
++.day { background:#e9f1f9; padding:10px; border-radius:12px; text-align:center; font-size:13px; cursor:pointer; }
++.today { border:2px solid #0072ff; }
++.event { background:#eef7ff; padding:6px 10px; border-radius:10px; margin:6px 0; font-size:14px; }
++
++.weekdays { display:grid; grid-template-columns:repeat(7,1fr); font-size:12px; font-weight:bold; text-align:center; margin-bottom:6px; }
++
++li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9fcff; padding:6px 10px; border-radius:10px; margin-bottom:6px; }
++li span { flex:1; }
++li.checked { text-decoration: line-through; background:#dffbe7; opacity:0.85; }
++
++input, button, select { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:15px; }
++button.primary { background:#0072ff; color:white; border:none; }
++button.danger { background:#ff4d4d; color:white; border:none; }
++.small { font-size:13px; color:#666; }
++
++.stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; text-align:center; }
++.stat { background:#eef7ff; padding:10px; border-radius:12px; font-weight:bold; }
++
++table { width:100%; border-collapse:collapse; }
++td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:left; }
++
++.form-grid { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
++.ticket-preview { width:100%; max-height:150px; object-fit:cover; border-radius:10px; border:1px solid #d5e8ff; }
++
++@media (max-width: 768px) {
++  header { flex-direction:column; padding:10px; gap:6px; }
++  header h2 { font-size:20px; margin:0; }
++  section { padding:10px; }
++  .card { padding:12px; border-radius:12px; }
++  .grid { gap:4px; }
++  .day { padding:8px 6px; font-size:12px; }
++  nav {
++    display:grid;
++    grid-template-columns:repeat(3, 1fr);
++    overflow-x:visible;
++  }
++  nav button {
++    min-width:0;
++    font-size:12px;
++    padding:10px 6px;
++    border-bottom:1px solid rgba(255,255,255,.15);
++    border-right:1px solid rgba(255,255,255,.08);
++  }
++  nav button:nth-child(3n) { border-right:none; }
++  .stats-grid { grid-template-columns:1fr; }
++  .form-grid { grid-template-columns:1fr; }
++  input, button, select { width:100%; box-sizing:border-box; }
++}
++</style>
++</head>
++<body>
++
++<header>
++  <img src="apple-touch-icon.png" alt="Icono">
++  <h2>Mi Planner Saludable</h2>
++</header>
++
++<nav>
++  <button class="active" onclick="showTab('hoy',this)">Hoy</button>
++  <button onclick="showTab('calendario',this)">Calendario</button>
++  <button onclick="showTab('alimentos',this)">Alimentos</button>
++  <button onclick="showTab('compra',this)">Lista compra</button>
++  <button onclick="showTab('gastos',this)">Gastos</button>
++  <button onclick="showTab('seguimiento',this)">Seguimiento</button>
++</nav>
++
++<section id="hoy" class="active">
++  <div class="card"><h3>Hoy</h3><div id="todayEvents">Cargando...</div></div>
++</section>
++
++<section id="calendario">
++  <div class="card">
++    <div style="display:flex;justify-content:space-between;align-items:center;">
++      <button onclick="prevMonth()">◀</button>
++      <strong id="monthLabel"></strong>
++      <button onclick="nextMonth()">▶</button>
++    </div>
++    <div class="weekdays"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div>
++    <div id="calendar" class="grid"></div>
++  </div>
++  <div class="card"><h3 id="selectedDate">Selecciona un día</h3><div id="dayEvents"></div></div>
++</section>
++
++<section id="alimentos">
++  <div class="card">
++    <h3>➕ Añadir alimento</h3>
++    <div style="display:flex; gap:6px; flex-wrap:wrap;">
++      <input id="nuevoAlimento" placeholder="Ej: Aguacate">
++      <select id="categoriaSelect"></select>
++      <button class="primary" onclick="addFood()">Añadir</button>
++    </div>
++    <p class="small">Marca los alimentos que quieres comprar.</p>
++  </div>
++  <div class="card" id="foodContainer">Cargando alimentos...</div>
++</section>
++
++<section id="compra">
++  <div class="card">
++    <h3>🛒 Lista de compra</h3>
++    <p class="small">Marca como comprados y puedes vaciar la lista cuando termines.</p>
++    <button class="danger" onclick="vaciarLista()">Vaciar lista</button>
++  </div>
++  <div class="card" id="listaCompra">Sin elementos seleccionados.</div>
++</section>
++
++<section id="seguimiento">
++  <div class="card">
++    <h3>📈 Seguimiento de peso</h3>
++    <div style="display:flex; gap:8px; margin-bottom:10px;">
++      <input type="number" step="0.1" id="pesoInput" placeholder="Peso (kg)">
++      <button class="primary" onclick="guardarPeso()">Guardar</button>
++    </div>
++  </div>
++
++  <div class="card"><canvas id="pesoChart" height="120"></canvas></div>
++
++  <div class="card">
++    <h3>Medias</h3>
++    <div class="stats-grid">
++      <div class="stat" id="mediaSemanal">Semanal: -</div>
++      <div class="stat" id="mediaMensual">Mensual: -</div>
++      <div class="stat" id="mediaAnual">Anual: -</div>
++    </div>
++  </div>
++
++  <div class="card">
++    <h3>Registros</h3>
++    <table>
++      <thead><tr><th>Fecha</th><th>Peso</th><th></th></tr></thead>
++      <tbody id="tablaPesos"></tbody>
++    </table>
++  </div>
++</section>
++
++<section id="gastos">
++  <div class="card">
++    <h3>🧾 Nuevo ticket de compra</h3>
++    <div class="form-grid">
++      <input id="ticketStore" placeholder="Supermercado (Ej: Mercadona)">
++      <input type="number" step="0.01" id="ticketAmount" placeholder="Total €">
++      <input type="date" id="ticketDate">
++      <input type="file" id="ticketPhoto" accept="image/*" capture="environment">
++    </div>
++    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
++      <button class="primary" onclick="guardarGasto()">Guardar gasto</button>
++      <button class="danger" onclick="limpiarGastos()">Borrar todos</button>
++    </div>
++    <p class="small">Puedes adjuntar una foto del ticket para tener histórico visual de cada compra.</p>
++  </div>
++
++  <div class="card">
++    <h3>Resumen de gasto</h3>
++    <div class="stats-grid">
++      <div class="stat" id="gastoSemanal">Semanal: 0.00 €</div>
++      <div class="stat" id="gastoMensual">Mensual: 0.00 €</div>
++      <div class="stat" id="gastoAnual">Anual: 0.00 €</div>
++    </div>
++  </div>
++
++  <div class="card"><canvas id="gastoChart" height="120"></canvas></div>
++
++  <div class="card">
++    <h3>Histórico de tickets</h3>
++    <div id="ticketList">Sin gastos registrados.</div>
++  </div>
++</section>
++
++<script>
++let eventsByDate = {};
++let current = new Date();
++let chart;
++let gastoChart;
++let alimentosData = {};
++
++function showTab(id,btn){
++  document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
++  document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
++  document.getElementById(id).classList.add("active");
++  btn.classList.add("active");
++  if(id==="compra") renderCompra();
++  if(id==="gastos") renderGastos();
++}
++
++// ---------- ICS ----------
++async function loadICS(){
++  try{
++    const res = await fetch("plan_anual_completo_365_dias.ics");
++    const text = await res.text();
++    const blocks = text.split("BEGIN:VEVENT");
++    blocks.forEach(b=>{
++      const summary = (b.match(/SUMMARY:(.+)/)||[])[1];
++      const dt = (b.match(/DTSTART:(\d{8})T(\d{6})/)||[]);
++      if(!summary||!dt[1]) return;
++      const date = dt[1].slice(0,4)+"-"+dt[1].slice(4,6)+"-"+dt[1].slice(6,8);
++      const time = dt[2].slice(0,2)+":"+dt[2].slice(2,4);
++      if(!eventsByDate[date]) eventsByDate[date]=[];
++      eventsByDate[date].push(time+" - "+summary);
++    });
++    renderToday(); renderCalendar();
++  }catch(e){}
++}
++
++function renderToday(){
++  const today = new Date().toISOString().slice(0,10);
++  const cont = document.getElementById("todayEvents");
++  cont.innerHTML="";
++  (eventsByDate[today]||["Sin eventos"]).forEach(e=> cont.innerHTML += "<div class='event'>"+e+"</div>");
++}
++
++function renderCalendar(){
++  const y=current.getFullYear(), m=current.getMonth();
++  document.getElementById("monthLabel").innerText =
++    current.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
++  const first=(new Date(y,m,1).getDay()+6)%7;
++  const days=new Date(y,m+1,0).getDate();
++  const cal=document.getElementById("calendar");
++  cal.innerHTML="";
++  for(let i=0;i<first;i++) cal.innerHTML+="<div></div>";
++  for(let d=1;d<=days;d++){
++    const date=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
++    const todayClass = date===new Date().toISOString().slice(0,10) ? "today" : "";
++    cal.innerHTML+=`<div class="day ${todayClass}" onclick="showDay('${date}')">${d}</div>`;
++  }
++}
++
++function showDay(date){
++  document.getElementById("selectedDate").innerText = date;
++  const cont=document.getElementById("dayEvents");
++  cont.innerHTML="";
++  (eventsByDate[date]||["Sin eventos"]).forEach(e=> cont.innerHTML += "<div class='event'>"+e+"</div>");
++}
++
++function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
++function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
++
++// ---------- ALIMENTOS ----------
++async function loadFoods(){
++  try{
++    const local = localStorage.getItem("alimentosData");
++    if(local){
++      alimentosData = JSON.parse(local);
++    } else {
++      const res = await fetch("ALIMENTOS SALUDABLES.json");
++      alimentosData = await res.json();
++      localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
++    }
++    renderFoods();
++  }catch(e){
++    document.getElementById("foodContainer").innerHTML = "No se pudieron cargar alimentos.";
++  }
++}
++
++function renderFoods(){
++  const cont = document.getElementById("foodContainer");
++  const select = document.getElementById("categoriaSelect");
++  cont.innerHTML=""; select.innerHTML="";
++  const checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
++
++  Object.keys(alimentosData).forEach(cat=>{
++    select.innerHTML += `<option value="${cat}">${cat}</option>`;
++    cont.innerHTML += `<h3>${cat}</h3>`;
++    alimentosData[cat].forEach((item,i)=>{
++      const key = cat+"_"+item;
++      const marcado = checks[key];
++      cont.innerHTML += `<li class="${marcado?'checked':''}">
++               <input type="checkbox" ${marcado?'checked':''} onchange="toggleCheck('${key}')">
++        <span>${item}</span>
++        <button onclick="removeFood('${cat}',${i})">🗑️</button>
++      </li>`;
++    });
++  });
++}
++
++function toggleCheck(key){
++  let checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
++  checks[key] = !checks[key];
++  localStorage.setItem("foodChecks", JSON.stringify(checks));
++  renderFoods();
++  renderCompra();
++}
++
++function addFood(){
++  const name = document.getElementById("nuevoAlimento").value.trim();
++  const cat = document.getElementById("categoriaSelect").value;
++  if(!name) return alert("Introduce un alimento");
++  alimentosData[cat].push(name);
++  localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
++  document.getElementById("nuevoAlimento").value="";
++  renderFoods();
++}
++
++function removeFood(cat,index){
++  alimentosData[cat].splice(index,1);
++  localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
++  renderFoods();
++  renderCompra();
++}
++
++// ---------- COMPRA ----------
++function renderCompra(){
++  const cont = document.getElementById("listaCompra");
++  const checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
++  const purchase = JSON.parse(localStorage.getItem("purchaseChecks")||"{}");
++
++  const items = Object.keys(checks).filter(k=>checks[k]);
++
++  if(items.length===0){
++    cont.innerHTML = "No has marcado ningún alimento todavía.";
++    return;
++  }
++
++  cont.innerHTML = "";
++  items.forEach(k=>{
++    const name = k.split("_").slice(1).join("_");
++    const comprado = purchase[k];
++    cont.innerHTML += `<li class="${comprado?'checked':''}">
++      <input type="checkbox" ${comprado?'checked':''} onchange="togglePurchased('${k}')">
++      <span>${name}</span>
++    </li>`;
++  });
++}
++
++function togglePurchased(key){
++  let purchase = JSON.parse(localStorage.getItem("purchaseChecks")||"{}");
++  purchase[key] = !purchase[key];
++  localStorage.setItem("purchaseChecks", JSON.stringify(purchase));
++  renderCompra();
++}
++
++function vaciarLista(){
++  if(confirm("¿Vaciar toda la lista de compra?")){
++    localStorage.removeItem("foodChecks");
++    localStorage.removeItem("purchaseChecks");
++    renderFoods();
++    renderCompra();
++  }
++}
++
++// ---------- PESO ----------
++function guardarPeso(){
++  const v = parseFloat(document.getElementById("pesoInput").value);
++  if(!v) return alert("Introduce peso válido");
++  const hoy = new Date().toISOString().slice(0,10);
++  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
++  data[hoy]=v;
++  localStorage.setItem("pesos",JSON.stringify(data));
++  document.getElementById("pesoInput").value="";
++  renderPesos();
++}
++
++function borrarPeso(fecha){
++  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
++  delete data[fecha];
++  localStorage.setItem("pesos",JSON.stringify(data));
++  renderPesos();
++}
++
++function renderPesos(){
++  const data = JSON.parse(localStorage.getItem("pesos")||"{}");
++  const fechas = Object.keys(data).sort();
++  const pesos = fechas.map(f=>data[f]);
++
++  const tbody=document.getElementById("tablaPesos");
++  tbody.innerHTML="";
++  fechas.forEach(f=>{
++    tbody.innerHTML += `<tr><td>${f}</td><td>${data[f]} kg</td><td><button onclick="borrarPeso('${f}')">❌</button></td></tr>`;
++  });
++
++  if(chart) chart.destroy();
++  chart=new Chart(document.getElementById("pesoChart"),{
++    type:"line",
++    data:{labels:fechas,datasets:[{data:pesos,fill:true,tension:0.3}]},
++    options:{plugins:{legend:{display:false}}}
++  });
++  calcularMedias(fechas,pesos);
++}
++
++function calcularMedias(fechas,pesos){
++  function avg(arr){return arr.length?(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1):"-";}
++  const now=new Date();
++  const semanal=[], mensual=[], anual=[];
++  fechas.forEach((f,i)=>{
++    const d=new Date(f);
++    const diff=(now-d)/(1000*3600*24);
++    if(diff<=7) semanal.push(pesos[i]);
++    if(diff<=30) mensual.push(pesos[i]);
++    if(diff<=365) anual.push(pesos[i]);
++  });
++  document.getElementById("mediaSemanal").innerText="Semanal: "+avg(semanal)+" kg";
++  document.getElementById("mediaMensual").innerText="Mensual: "+avg(mensual)+" kg";
++  document.getElementById("mediaAnual").innerText="Anual: "+avg(anual)+" kg";
++}
++
++// ---------- GASTOS ----------
++function getStartOfWeek(date){
++  const d = new Date(date);
++  const day = (d.getDay() + 6) % 7;
++  d.setDate(d.getDate() - day);
++  d.setHours(0,0,0,0);
++  return d;
++}
++
++function guardarGasto(){
++  const store = document.getElementById("ticketStore").value.trim() || "Supermercado";
++  const amount = parseFloat(document.getElementById("ticketAmount").value);
++  const date = document.getElementById("ticketDate").value || new Date().toISOString().slice(0,10);
++  const photoInput = document.getElementById("ticketPhoto");
++
++  if(!amount || amount <= 0) return alert("Introduce un importe válido");
++
++  const saveExpense = (photoData="") => {
++    let gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++    gastos.unshift({
++      id: Date.now(),
++      store,
++      amount: Number(amount.toFixed(2)),
++      date,
++      photo: photoData
++    });
++    localStorage.setItem("gastosCompra", JSON.stringify(gastos));
++
++    document.getElementById("ticketStore").value = "";
++    document.getElementById("ticketAmount").value = "";
++    document.getElementById("ticketDate").value = "";
++    photoInput.value = "";
++    renderGastos();
++  };
++
++  const file = photoInput.files[0];
++  if(file){
++    const reader = new FileReader();
++    reader.onload = () => saveExpense(reader.result);
++    reader.readAsDataURL(file);
++  } else {
++    saveExpense();
++  }
++}
++
++function borrarGasto(id){
++  let gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++  gastos = gastos.filter(g => g.id !== id);
++  localStorage.setItem("gastosCompra", JSON.stringify(gastos));
++  renderGastos();
++}
++
++function limpiarGastos(){
++  if(confirm("¿Borrar todos los gastos de supermercado?")){
++    localStorage.removeItem("gastosCompra");
++    renderGastos();
++  }
++}
++
++function renderGastos(){
++  const gastos = JSON.parse(localStorage.getItem("gastosCompra") || "[]");
++  const list = document.getElementById("ticketList");
++  const now = new Date();
++
++  let semanal = 0, mensual = 0, anual = 0;
++  const chartData = {};
++
++  gastos.forEach(g => {
++    const d = new Date(g.date + "T00:00:00");
++    const diffDays = (now - d) / (1000 * 3600 * 24);
++    if(diffDays <= 7) semanal += g.amount;
++    if(diffDays <= 30) mensual += g.amount;
++    if(diffDays <= 365) anual += g.amount;
++
++    const week = getStartOfWeek(d).toISOString().slice(0,10);
++    chartData[week] = (chartData[week] || 0) + g.amount;
++  });
++
++  document.getElementById("gastoSemanal").innerText = `Semanal: ${semanal.toFixed(2)} €`;
++  document.getElementById("gastoMensual").innerText = `Mensual: ${mensual.toFixed(2)} €`;
++  document.getElementById("gastoAnual").innerText = `Anual: ${anual.toFixed(2)} €`;
++
++  if(gastos.length === 0){
++    list.innerHTML = "Sin gastos registrados.";
++  } else {
++    list.innerHTML = gastos.map(g => `
++      <div class="event" style="margin-bottom:10px;">
++        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
++          <div>
++            <strong>${g.store}</strong> · ${g.date}<br>
++            <span>${g.amount.toFixed(2)} €</span>
++          </div>
++          <button onclick="borrarGasto(${g.id})">🗑️</button>
++        </div>
++        ${g.photo ? `<img src="${g.photo}" alt="Ticket ${g.store}" class="ticket-preview">` : ""}
++      </div>
++    `).join("");
++  }
++
++  const labels = Object.keys(chartData).sort();
++  const values = labels.map(l => Number(chartData[l].toFixed(2)));
++
++  if(gastoChart) gastoChart.destroy();
++  gastoChart = new Chart(document.getElementById("gastoChart"), {
++    type: "bar",
++    data: {
++      labels,
++      datasets: [{
++        label: "Gasto semanal (€)",
++        data: values,
++        backgroundColor: "rgba(0, 114, 255, 0.5)",
++        borderColor: "#0072ff",
++        borderWidth: 1
++      }]
++    },
++    options: {
++      plugins: { legend: { display: false } },
++      scales: { y: { beginAtZero: true } }
++    }
++  });
++}
++
++// ---------- FUNCIÓN PARA ATAJOS ----------
++window.getWidgetText = function() {
++  const today = new Date().toISOString().slice(0,10);
++  const eventos = (eventsByDate[today] || []);
++  const textoEventos = eventos.length ? eventos.join("\n") : "Sin eventos hoy";
++
++  const pesos = JSON.parse(localStorage.getItem("pesos")||"{}");
++  const fechas = Object.keys(pesos).sort();
++  const ultimoPeso = fechas.length ? pesos[fechas[fechas.length-1]] + " kg" : "No registrado";
++
++  return `📅 Hoy – Mi Planner\n\n${textoEventos}\n\n⚖️ Peso: ${ultimoPeso}`;
++};
++
++loadICS(); 
++loadFoods(); 
++renderPesos();
++renderGastos();
++</script>
++</body>
++</html>
+diff --git a/index_actualizado.zip b/index_actualizado.zip
+new file mode 100644
+index 0000000000000000000000000000000000000000..0b18e92cf68ab4122d5673ea840df3e5073a1a72
+GIT binary patch
+literal 6288
+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
+
+literal 0
+HcmV?d00001
+
+ 
+EOF
+)
