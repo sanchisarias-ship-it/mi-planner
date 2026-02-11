@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mi Planner Saludable</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif; margin:0; background:#f4f9ff; }
+header { background:linear-gradient(135deg,#00c6ff,#0072ff); color:white; padding:12px; text-align:center; display:flex; align-items:center; justify-content:center; gap:12px;}
+header img { width:48px; height:48px; border-radius:12px; }
+nav { display:flex; background:#0d2b45; }
+nav button { flex:1; padding:12px; border:none; background:#0d2b45; color:white; font-size:14px; }
+nav button.active { background:#123e63; }
+section { display:none; padding:14px; }
+section.active { display:block; }
+.card { background:white; padding:14px; border-radius:16px; margin-bottom:12px; box-shadow:0 4px 8px rgba(0,0,0,.06); }
+
+.grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+.day { background:#e9f1f9; padding:10px; border-radius:12px; text-align:center; font-size:13px; cursor:pointer; }
+.today { border:2px solid #0072ff; }
+.event { background:#eef7ff; padding:6px 10px; border-radius:10px; margin:6px 0; font-size:14px; }
+
+.weekdays { display:grid; grid-template-columns:repeat(7,1fr); font-size:12px; font-weight:bold; text-align:center; margin-bottom:6px; }
+
+li { list-style:none; display:flex; align-items:center; gap:8px; background:#f9fcff; padding:6px 10px; border-radius:10px; margin-bottom:6px; }
+li span { flex:1; }
+li.checked { text-decoration: line-through; background:#dffbe7; opacity:0.85; }
+
+input, button, select { padding:10px; border-radius:10px; border:1px solid #ccc; font-size:15px; }
+button.primary { background:#0072ff; color:white; border:none; }
+button.danger { background:#ff4d4d; color:white; border:none; }
+.small { font-size:13px; color:#666; }
+
+.stats-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; text-align:center; }
+.stat { background:#eef7ff; padding:10px; border-radius:12px; font-weight:bold; }
+
+table { width:100%; border-collapse:collapse; }
+td, th { padding:6px; border-bottom:1px solid #eee; font-size:14px; text-align:left; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="apple-touch-icon.png" alt="Icono">
+  <h2>Mi Planner Saludable</h2>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('hoy',this)">Hoy</button>
+  <button onclick="showTab('calendario',this)">Calendario</button>
+  <button onclick="showTab('alimentos',this)">Alimentos</button>
+  <button onclick="showTab('compra',this)">Lista compra</button>
+  <button onclick="showTab('seguimiento',this)">Seguimiento</button>
+</nav>
+
+<section id="hoy" class="active">
+  <div class="card"><h3>Hoy</h3><div id="todayEvents">Cargando...</div></div>
+</section>
+
+<section id="calendario">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <button onclick="prevMonth()">◀</button>
+      <strong id="monthLabel"></strong>
+      <button onclick="nextMonth()">▶</button>
+    </div>
+    <div class="weekdays"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div>
+    <div id="calendar" class="grid"></div>
+  </div>
+  <div class="card"><h3 id="selectedDate">Selecciona un día</h3><div id="dayEvents"></div></div>
+</section>
+
+<section id="alimentos">
+  <div class="card">
+    <h3>➕ Añadir alimento</h3>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <input id="nuevoAlimento" placeholder="Ej: Aguacate">
+      <select id="categoriaSelect"></select>
+      <button class="primary" onclick="addFood()">Añadir</button>
+    </div>
+    <p class="small">Marca los alimentos que quieres comprar.</p>
+  </div>
+  <div class="card" id="foodContainer">Cargando alimentos...</div>
+</section>
+
+<section id="compra">
+  <div class="card">
+    <h3>🛒 Lista de compra</h3>
+    <p class="small">Marca como comprados y puedes vaciar la lista cuando termines.</p>
+    <button class="danger" onclick="vaciarLista()">Vaciar lista</button>
+  </div>
+  <div class="card" id="listaCompra">Sin elementos seleccionados.</div>
+</section>
+
+<section id="seguimiento">
+  <div class="card">
+    <h3>📈 Seguimiento de peso</h3>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <input type="number" step="0.1" id="pesoInput" placeholder="Peso (kg)">
+      <button class="primary" onclick="guardarPeso()">Guardar</button>
+    </div>
+  </div>
+
+  <div class="card"><canvas id="pesoChart" height="120"></canvas></div>
+
+  <div class="card">
+    <h3>Medias</h3>
+    <div class="stats-grid">
+      <div class="stat" id="mediaSemanal">Semanal: -</div>
+      <div class="stat" id="mediaMensual">Mensual: -</div>
+      <div class="stat" id="mediaAnual">Anual: -</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Registros</h3>
+    <table>
+      <thead><tr><th>Fecha</th><th>Peso</th><th></th></tr></thead>
+      <tbody id="tablaPesos"></tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+let eventsByDate = {};
+let current = new Date();
+let chart;
+let alimentosData = {};
+
+function showTab(id,btn){
+  document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="compra") renderCompra();
+}
+
+// --------- ICS ----------
+async function loadICS(){
+  try{
+    const res = await fetch("plan_anual_completo_365_dias.ics");
+    const text = await res.text();
+    const blocks = text.split("BEGIN:VEVENT");
+    blocks.forEach(b=>{
+      const summary = (b.match(/SUMMARY:(.+)/)||[])[1];
+      const dt = (b.match(/DTSTART:(\d{8})T(\d{6})/)||[]);
+      if(!summary||!dt[1]) return;
+      const date = dt[1].slice(0,4)+"-"+dt[1].slice(4,6)+"-"+dt[1].slice(6,8);
+      const time = dt[2].slice(0,2)+":"+dt[2].slice(2,4);
+      if(!eventsByDate[date]) eventsByDate[date]=[];
+      eventsByDate[date].push(time+" - "+summary);
+    });
+    renderToday(); renderCalendar();
+  }catch(e){}
+}
+
+function renderToday(){
+  const today = new Date().toISOString().slice(0,10);
+  const cont = document.getElementById("todayEvents");
+  cont.innerHTML="";
+  (eventsByDate[today]||["Sin eventos"]).forEach(e=> cont.innerHTML += "<div class='event'>"+e+"</div>");
+}
+
+function renderCalendar(){
+  const y=current.getFullYear(), m=current.getMonth();
+  document.getElementById("monthLabel").innerText =
+    current.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+  const first=(new Date(y,m,1).getDay()+6)%7;
+  const days=new Date(y,m+1,0).getDate();
+  const cal=document.getElementById("calendar");
+  cal.innerHTML="";
+  for(let i=0;i<first;i++) cal.innerHTML+="<div></div>";
+  for(let d=1;d<=days;d++){
+    const date=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    const todayClass = date===new Date().toISOString().slice(0,10) ? "today" : "";
+    cal.innerHTML+=`<div class="day ${todayClass}" onclick="showDay('${date}')">${d}</div>`;
+  }
+}
+
+function showDay(date){
+  document.getElementById("selectedDate").innerText = date;
+  const cont=document.getElementById("dayEvents");
+  cont.innerHTML="";
+  (eventsByDate[date]||["Sin eventos"]).forEach(e=> cont.innerHTML += "<div class='event'>"+e+"</div>");
+}
+
+function prevMonth(){ current.setMonth(current.getMonth()-1); renderCalendar(); }
+function nextMonth(){ current.setMonth(current.getMonth()+1); renderCalendar(); }
+
+// -------- ALIMENTOS --------
+async function loadFoods(){
+  try{
+    const local = localStorage.getItem("alimentosData");
+    if(local){
+      alimentosData = JSON.parse(local);
+    } else {
+      const res = await fetch("ALIMENTOS SALUDABLES.json");
+      alimentosData = await res.json();
+      localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
+    }
+    renderFoods();
+  }catch(e){
+    document.getElementById("foodContainer").innerHTML = "No se pudieron cargar alimentos.";
+  }
+}
+
+function renderFoods(){
+  const cont = document.getElementById("foodContainer");
+  const select = document.getElementById("categoriaSelect");
+  cont.innerHTML=""; select.innerHTML="";
+  const checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
+
+  Object.keys(alimentosData).forEach(cat=>{
+    select.innerHTML += `<option value="${cat}">${cat}</option>`;
+    cont.innerHTML += `<h3>${cat}</h3>`;
+    alimentosData[cat].forEach((item,i)=>{
+      const key = cat+"_"+item;
+      const marcado = checks[key];
+      cont.innerHTML += `<li class="${marcado?'checked':''}">
+        <input type="checkbox" ${marcado?'checked':''} onchange="toggleCheck('${key}')">
+        <span>${item}</span>
+        <button onclick="removeFood('${cat}',${i})">🗑️</button>
+      </li>`;
+    });
+  });
+}
+
+function toggleCheck(key){
+  let checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
+  checks[key] = !checks[key];
+  localStorage.setItem("foodChecks", JSON.stringify(checks));
+  renderFoods();
+  renderCompra();
+}
+
+function addFood(){
+  const name = document.getElementById("nuevoAlimento").value.trim();
+  const cat = document.getElementById("categoriaSelect").value;
+  if(!name) return alert("Introduce un alimento");
+  alimentosData[cat].push(name);
+  localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
+  document.getElementById("nuevoAlimento").value="";
+  renderFoods();
+}
+
+function removeFood(cat,index){
+  alimentosData[cat].splice(index,1);
+  localStorage.setItem("alimentosData", JSON.stringify(alimentosData));
+  renderFoods();
+  renderCompra();
+}
+
+// -------- LISTA COMPRA --------
+function renderCompra(){
+  const cont = document.getElementById("listaCompra");
+  const checks = JSON.parse(localStorage.getItem("foodChecks")||"{}");
+  const purchase = JSON.parse(localStorage.getItem("purchaseChecks")||"{}");
+
+  const items = Object.keys(checks).filter(k=>checks[k]);
+
+  if(items.length===0){
+    cont.innerHTML = "No has marcado ningún alimento todavía.";
+    return;
+  }
+
+  cont.innerHTML = "";
+  items.forEach(k=>{
+    const name = k.split("_").slice(1).join("_");
+    const comprado = purchase[k];
+    cont.innerHTML += `<li class="${comprado?'checked':''}">
+      <input type="checkbox" ${comprado?'checked':''} onchange="togglePurchased('${k}')">
+      <span>${name}</span>
+    </li>`;
+  });
+}
+
+function togglePurchased(key){
+  let purchase = JSON.parse(localStorage.getItem("purchaseChecks")||"{}");
+  purchase[key] = !purchase[key];
+  localStorage.setItem("purchaseChecks", JSON.stringify(purchase));
+  renderCompra();
+}
+
+function vaciarLista(){
+  if(confirm("¿Vaciar toda la lista de compra?")){
+    localStorage.removeItem("foodChecks");
+    localStorage.removeItem("purchaseChecks");
+    renderFoods();
+    renderCompra();
+  }
+}
+
+// -------- PESO --------
+function guardarPeso(){
+  const v = parseFloat(document.getElementById("pesoInput").value);
+  if(!v) return alert("Introduce peso válido");
+  const hoy = new Date().toISOString().slice(0,10);
+  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+  data[hoy]=v;
+  localStorage.setItem("pesos",JSON.stringify(data));
+  document.getElementById("pesoInput").value="";
+  renderPesos();
+}
+
+function borrarPeso(fecha){
+  let data = JSON.parse(localStorage.getItem("pesos")||"{}");
+  delete data[fecha];
+  localStorage.setItem("pesos",JSON.stringify(data));
+  renderPesos();
+}
+
+function renderPesos(){
+  const data = JSON.parse(localStorage.getItem("pesos")||"{}");
+  const fechas = Object.keys(data).sort();
+  const pesos = fechas.map(f=>data[f]);
+
+  const tbody=document.getElementById("tablaPesos");
+  tbody.innerHTML="";
+  fechas.forEach(f=>{
+    tbody.innerHTML += `<tr><td>${f}</td><td>${data[f]} kg</td><td><button onclick="borrarPeso('${f}')">❌</button></td></tr>`;
+  });
+
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById("pesoChart"),{
+    type:"line",
+    data:{labels:fechas,datasets:[{data:pesos,fill:true,tension:0.3}]},
+    options:{plugins:{legend:{display:false}}}
+  });
+  calcularMedias(fechas,pesos);
+}
+
+function calcularMedias(fechas,pesos){
+  function avg(arr){return arr.length?(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1):"-";}
+  const now=new Date();
+  const semanal=[], mensual=[], anual=[];
+  fechas.forEach((f,i)=>{
+    const d=new Date(f);
+    const diff=(now-d)/(1000*3600*24);
+    if(diff<=7) semanal.push(pesos[i]);
+    if(diff<=30) mensual.push(pesos[i]);
+    if(diff<=365) anual.push(pesos[i]);
+  });
+  document.getElementById("mediaSemanal").innerText="Semanal: "+avg(semanal)+" kg";
+  document.getElementById("mediaMensual").innerText="Mensual: "+avg(mensual)+" kg";
+  document.getElementById("mediaAnual").innerText="Anual: "+avg(anual)+" kg";
+}
+
+loadICS(); loadFoods(); renderPesos();
+</script>
+</body>
+</html>
